@@ -1,0 +1,3 @@
+New cloud project, weeks of tickets? TCSP gives every team its own governed AWS account from a Git request: admin inside your account, hard limits outside it, with logs, findings and telemetry wired in from the first minute.
+
+Account vending through AFT and Control Tower, shared CI on EKS with CD in your own cluster (or CodePipeline to ECS), and five guardrail layers. Explore the interactive architecture in tcsp-platform.
