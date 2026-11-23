@@ -653,7 +653,12 @@ function fromHash(){const h=(location.hash||"").slice(1);let m;
 window.addEventListener("hashchange",fromHash);
 
 overview();fromHash();
-window.TCSP={startFlow,startTour,stopAll,showComponent,state:E};
+/* deterministic control for screenshots, tests and video capture: show flow n at step si with the token at progress p (0..1) */
+function seek(n,si,p){if(!FLOW[n])return;
+  if(E.mode!=="flow"||curFlowN()!==n){stopAll(true);E.mode="flow";E.items=[{type:"flow",n}];E.ii=0;setFocus(n);markFlowButton(n);player.hidden=false;E.si=-1;}
+  setPlaying(false);if(E.si!==si)gotoStep(si);if(E.path&&FLOW[n].steps[si].w){showToken(true);placeToken(p==null?1:p);}}
+function setLayers(list){if(E.mode)stopAll(true);FSET.clear();(list||[]).forEach(l=>FSET.add(l));applyFilter();}
+window.TCSP={startFlow,startTour,stopAll,showComponent,seek,setLayers,state:E};
 })();
 </script>
 </body>
