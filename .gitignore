@@ -1,0 +1,7 @@
+node_modules/
+brag-output*/
+.hyperframes/
+composition/
+*.composition.*
+.DS_Store
+Thumbs.db
