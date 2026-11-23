@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TCSP platform architecture</title>
+<meta name="description" content="Interactive architecture of TCSP, an AWS multi-account platform: governed accounts from Git, guardrails not gates, security and observability from day one.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --ink:#17202a; --muted:#566372; --line:#8b97a5; --gov-line:#9aa5b2;
+  --accent:#0b5cad; --accent-soft:#e3eefa; --token:#e8890c; --token-soft:rgba(232,137,12,.22);
+  --ctr:#f8fafb; --ctr2:#eef1f4; --add:#0b8a7a; --dev:#fde8ee; --on-icon:#ffffff; --shadow:0 6px 24px rgba(16,24,40,.12);
+  --l-gov:#c0306b; --l-prov:#2f6bd6; --l-sec:#c8372d; --l-net:#6a3fcf; --l-del:#c8640a; --l-obs:#0e8a6a; --l-ppl:#4f5e6e;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f141a; --surface:#161d25; --ink:#e6ebf0; --muted:#9aa7b4; --line:#6f7d8c; --gov-line:#5d6a78;
+    --accent:#5aa2ef; --accent-soft:#16283c; --token:#ffb547; --token-soft:rgba(255,181,71,.25);
+    --ctr:#1b232c; --ctr2:#212b35; --add:#3cc4b1; --dev:#3a1f2a; --on-icon:#0f141a; --shadow:0 6px 24px rgba(0,0,0,.45);
+    --l-gov:#e0558d; --l-prov:#6a9cf2; --l-sec:#ec6a5f; --l-net:#9b77f0; --l-del:#f0953a; --l-obs:#3cc4a0; --l-ppl:#8796a6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#161d25; --ink:#e6ebf0; --muted:#9aa7b4; --line:#6f7d8c; --gov-line:#5d6a78;
+  --accent:#5aa2ef; --accent-soft:#16283c; --token:#ffb547; --token-soft:rgba(255,181,71,.25);
+  --ctr:#1b232c; --ctr2:#212b35; --add:#3cc4b1; --dev:#3a1f2a; --on-icon:#0f141a; --shadow:0 6px 24px rgba(0,0,0,.45);
+  --l-gov:#e0558d; --l-prov:#6a9cf2; --l-sec:#ec6a5f; --l-net:#9b77f0; --l-del:#f0953a; --l-obs:#3cc4a0; --l-ppl:#8796a6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+a{color:var(--accent)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.skip{position:absolute;left:-9999px}.skip:focus{left:12px;top:12px;z-index:20;background:var(--surface);padding:6px 10px;border-radius:6px}
+
+/* header */
+header.top{max-width:1640px;margin:0 auto;padding:22px 24px 6px;display:grid;gap:12px}
+.titlebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+h1{font-weight:600;font-size:24px;margin:0;letter-spacing:.01em}
+.kicker{font-size:13px;color:var(--muted);border:1px solid var(--ctr2);background:var(--surface);border-radius:999px;padding:2px 10px}
+.actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 14px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+:root[data-theme="dark"] .btn.primary{color:#0f141a}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.primary{color:#0f141a}}
+.btn svg{width:14px;height:14px;fill:currentColor}
+.lede{margin:0;max-width:80ch;font-size:16px}
+.values{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.values li{background:var(--surface);border:1px solid var(--ctr2);border-left:3px solid var(--accent);border-radius:8px;padding:8px 12px;font-size:13.5px;color:var(--muted)}
+.values b{display:block;color:var(--ink);font-weight:600;font-size:14px}
+@media (max-width:900px){.values{grid-template-columns:1fr}}
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:13px}
+.filters .lab{color:var(--muted);margin-right:2px}
+.fchip{border:1px solid var(--ctr2);background:var(--surface);border-radius:999px;padding:3px 11px 3px 8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.fchip:hover{border-color:var(--line)}
+.fchip[aria-pressed="true"]{border-color:var(--ink);background:var(--accent-soft);font-weight:500}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block;flex:none}
+.legend{display:inline-flex;gap:14px;color:var(--muted);margin-left:auto;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw.add{border:1.5px dashed var(--add);background:transparent}
+.mini-badge{font-family:var(--f-mono);font-size:10px;font-weight:600;width:16px;height:16px;border-radius:50%;background:var(--accent);color:var(--surface);display:inline-grid;place-items:center}
+
+/* stage */
+.stage{position:relative;max-width:1640px;margin:0 auto;padding:4px 16px 0}
+.canvas{overflow-x:auto;overflow-y:hidden;border-radius:12px;-webkit-overflow-scrolling:touch}
+svg#arch{display:block;width:100%;min-width:1100px;height:auto;font-family:var(--f-body)}
+.frame{fill:var(--surface);stroke:var(--accent);stroke-width:2}
+.aws{fill:none;stroke:var(--ink);stroke-width:1.3}
+.ctr{fill:var(--ctr);stroke:var(--line);stroke-width:1.1}
+.ctr2{fill:var(--ctr2);stroke:var(--line);stroke-width:.9}
+.ctr.dash{fill:none;stroke-dasharray:5 4}
+.ctitle{font-size:12.5px;font-weight:600;fill:var(--ink)}
+.csub{font-size:10.5px;fill:var(--muted)}
+.lbl{font-size:11px;fill:var(--ink);text-anchor:middle}
+.sub{font-size:9.5px;fill:var(--muted);text-anchor:middle}
+.abbr{font-family:var(--f-mono);font-size:10px;font-weight:600;fill:var(--on-icon);text-anchor:middle;pointer-events:none}
+.big{font-size:24px;font-weight:600;fill:var(--ink);text-anchor:middle}
+.ci{fill:var(--surface);stroke:var(--ink);stroke-width:1.3}
+.extbox{fill:var(--surface);stroke-width:1.4}
+.devspace{fill:var(--dev);stroke:var(--l-prov);stroke-width:1.1}
+.alab{font-size:10px;fill:var(--muted)}
+.badge circle{fill:var(--accent)}
+.badge text{font-family:var(--f-mono);font-size:9.5px;font-weight:600;fill:var(--surface);text-anchor:middle}
+
+.chip{cursor:pointer}
+.chip:focus{outline:none}
+.chip .hit{fill:transparent;stroke:transparent;transition:fill .2s,stroke .2s}
+.chip:hover .hit,.chip:focus-visible .hit{stroke:var(--accent);stroke-width:1.4}
+.chip.add .hit{stroke:var(--add);stroke-dasharray:4 3;stroke-width:1.2}
+.chip .halo{fill:none;stroke:var(--accent);stroke-width:0;opacity:0;pointer-events:none}
+.chip.sel .hit{fill:var(--accent-soft)}
+.chip.sel .halo{opacity:1;stroke-width:2;animation:breathe 2.8s ease-in-out infinite}
+.chip.acct .outline{fill:none;stroke:transparent;stroke-width:2;pointer-events:none;transition:stroke .2s}
+.chip.acct .hit{rx:8}
+.chip.acct:hover .outline,.chip.acct:focus-visible .outline,.chip.acct.sel .outline{stroke:var(--accent)}
+.chip.acct:hover .hit,.chip.acct:focus-visible .hit{stroke:transparent}
+.chip.acct.sel .hit{fill:transparent}
+
+.wire{fill:none;stroke:var(--line);stroke-width:1.4;transition:stroke .25s,stroke-width .25s}
+.wire.dash{stroke-dasharray:6 4}
+.wire.gov{stroke:var(--gov-line)}
+.flowline{fill:none;stroke:var(--accent);stroke-opacity:.5;stroke-width:2.2;stroke-linecap:round;stroke-dasharray:.5 17;pointer-events:none;animation:drift 3.2s linear infinite}
+.wire-g.flowonly{opacity:0}
+.dimmable{transition:opacity .3s ease}
+
+/* flow focus */
+svg.focus .dimmable:not(.on){opacity:.12}
+svg.focus .wire-g.flowonly:not(.on){opacity:0}
+svg.focus .flowline{display:none}
+svg.focus .wire-g.on .wire{stroke:var(--accent);stroke-width:2.2;marker-end:url(#arr-on)}
+svg.focus .wire-g.on .wire.dash{stroke-dasharray:none}
+svg.focus .wire-g.cur .wire{stroke:var(--token);stroke-width:3.2;marker-end:url(#arr-cur)}
+svg.focus .wire-g .wire.na{marker-end:none}
+svg.focus .chip.acct.on .outline{stroke:var(--accent)}
+svg.focus .chip.acct.cur .outline{stroke:var(--token);stroke-width:3;animation:breathe 1.4s ease-in-out infinite}
+svg.focus .chip.cur .halo{opacity:1;stroke:var(--token);stroke-width:3;animation:pulse 1.3s ease-in-out infinite}
+svg.focus .chip.cur .hit{fill:var(--token-soft)}
+/* layer filter */
+svg.filtering .chip:not(.acct):not(.lay){opacity:.15}
+svg.filtering .wire-g{opacity:.18}
+svg.filtering .wire-g.flowonly{opacity:0}
+svg.filtering .flowline{display:none}
+svg.filtering .chip.lay .halo{opacity:1;stroke-width:2;stroke:var(--accent)}
+
+.token{pointer-events:none;filter:drop-shadow(0 0 6px var(--token))}
+.token .tk-glow{fill:var(--token);opacity:.28}
+.token .tk-core{fill:var(--token);stroke:var(--surface);stroke-width:1.5}
+
+@keyframes drift{to{stroke-dashoffset:-35}}
+@keyframes pulse{0%,100%{stroke-opacity:1;stroke-width:2.5}50%{stroke-opacity:.35;stroke-width:7}}
+@keyframes breathe{0%,100%{stroke-opacity:1}50%{stroke-opacity:.45}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes cardin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* tooltip, tour card */
+.tip{position:absolute;z-index:6;max-width:300px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.4;padding:8px 10px;border-radius:8px;pointer-events:none;box-shadow:var(--shadow);opacity:0;transition:opacity .12s}
+.tip.show{opacity:1}
+.tip b{display:block;font-weight:600;margin-bottom:2px}
+.tourcard{position:absolute;z-index:5;left:50%;top:18px;transform:translateX(-50%);background:var(--surface);border:1px solid var(--ctr2);border-top:4px solid var(--accent);border-radius:10px;box-shadow:var(--shadow);padding:12px 18px;max-width:min(620px,90%);font-size:16px;animation:cardin .35s ease-out}
+.tourcard .k{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:2px}
+
+/* player */
+.player{position:sticky;bottom:12px;z-index:7;margin:10px auto 0;max-width:1040px;background:var(--surface);border:1px solid var(--ctr2);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;animation:rise .25s ease-out}
+.player[hidden]{display:none}
+.pl-title{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.pl-title .num{width:22px;height:22px;font-size:11px}
+.pl-step{margin:2px 0 6px;font-size:16px;font-weight:500;min-height:1.5em}
+.pl-step .of{color:var(--muted);font-weight:400}
+.pl-dots{display:flex;gap:5px}
+.pl-dots i{width:22px;height:4px;border-radius:2px;background:var(--ctr2)}
+.pl-dots i.done{background:var(--accent)}
+.pl-dots i.cur{background:var(--token)}
+.pl-ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ib{border:1px solid var(--ctr2);background:var(--surface);border-radius:8px;width:36px;height:34px;display:grid;place-items:center;cursor:pointer}
+.ib:hover{border-color:var(--line)}
+.ib svg{width:15px;height:15px;fill:currentColor}
+.ib.main{background:var(--accent);border-color:var(--accent);color:var(--surface);width:42px}
+.speed{display:inline-flex;border:1px solid var(--ctr2);border-radius:8px;overflow:hidden;margin:0 4px}
+.speed button{border:0;background:transparent;padding:6px 9px;cursor:pointer;font-size:13px;font-family:var(--f-mono)}
+.speed button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+@media (max-width:700px){.player{grid-template-columns:1fr}.pl-ctrl{justify-content:flex-start}}
+
+/* panels */
+.below{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;max-width:1640px;margin:0 auto;padding:16px 24px 36px;align-items:start}
+@media (max-width:900px){.below{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--ctr2);border-radius:12px;padding:16px 18px}
+.panel h2{font-size:16px;margin:0 0 4px;font-weight:600}
+.panel .hint{color:var(--muted);font-size:13px;margin:0 0 10px}
+ol.flows{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+ol.flows .grp{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:10px 8px 2px}
+ol.flows button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:28px 1fr;gap:10px;width:100%;padding:7px 8px;border-radius:8px;cursor:pointer;align-items:start}
+ol.flows button:hover{background:var(--ctr2)}
+ol.flows button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+ol.flows button[aria-pressed="true"]{background:var(--accent-soft)}
+.num{font-family:var(--f-mono);font-weight:600;font-size:12px;background:var(--accent);color:var(--surface);border-radius:50%;width:24px;height:24px;display:inline-grid;place-items:center;flex:none}
+.ft{font-weight:600;font-size:14px}
+.fd{color:var(--muted);font-size:13px}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+#detail h2{font-size:18px}
+#detail h3{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:14px 0 3px;font-weight:600}
+#detail p{margin:0 0 6px;max-width:68ch}
+#detail .meta{font-size:13px;color:var(--muted);margin:0 0 2px}
+#detail .d-head{display:flex;align-items:center;gap:10px}
+.pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink);margin-right:6px}
+#detail .fl{display:flex;flex-wrap:wrap;gap:6px}
+#detail .fl button{border:1px solid var(--ctr2);background:var(--bg);border-radius:999px;padding:3px 10px 3px 4px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+#detail .fl button:hover{border-color:var(--accent)}
+#detail .fl .num{width:20px;height:20px;font-size:10.5px}
+.enter{animation:rise .28s ease-out}
+footer{max-width:1640px;margin:0 auto;padding:0 24px 28px;color:var(--muted);font-size:13px}
+
+/* screenshot view: just the diagram */
+body.shot header.top,body.shot .below,body.shot footer,body.shot .player{display:none}
+body.shot .stage{padding:0;max-width:none}
+body.shot .canvas{border-radius:0}
+body.shot .flowline{display:none}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .flowline{display:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#flows-h">Skip to the flow list</a>
+<header class="top">
+  <div class="titlebar">
+    <h1>TCSP</h1>
+    <span class="kicker">AWS multi-account platform · landing zone + internal developer platform</span>
+    <div class="actions">
+      <button class="btn primary" id="tour" type="button" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg><span>Tour the platform</span></button>
+      <button class="btn" id="theme" type="button">Dark theme</button>
+    </div>
+  </div>
+  <p class="lede">TCSP gives every project its own governed AWS account, created from a Git request and ready for code, with security, networking and observability built in from the first minute.</p>
+  <ul class="values">
+    <li><b>Fast, governed accounts</b>A merged request becomes a baselined account through automation, with no console clicks or ticket chains.</li>
+    <li><b>Guardrails, not gates</b>Teams get admin rights inside their own account. Organization policies set hard limits outside it.</li>
+    <li><b>Security and observability from day one</b>Logs, findings, telemetry and cost data flow to central accounts as soon as the account exists.</li>
+  </ul>
+  <div class="filters" role="group" aria-label="Highlight a layer">
+    <span class="lab">Highlight a layer:</span>
+    <span id="fchips" style="display:contents"></span>
+    <span class="legend" aria-label="Legend">
+      <span><i class="sw add"></i>optional / recommended addition</span>
+      <span><i class="mini-badge">3</i>flow number</span>
+    </span>
+  </div>
+</header>
+
+<main>
+<div class="stage" id="stage">
+  <div class="canvas" id="canvas">
+    <svg id="arch" viewBox="0 0 1600 1060" role="group" aria-label="TCSP architecture diagram. The management and AFT accounts at the top provision governed accounts into the Security OU, the Infra OU (Network and Shared accounts) and the Project OU below. External platforms sit on the right.">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--line)"/></marker>
+        <marker id="arr-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--accent)"/></marker>
+        <marker id="arr-cur" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--token)"/></marker>
+      </defs>
+      <g id="layer-ctr"></g>
+      <g id="layer-wire"></g>
+      <g id="layer-chip"></g>
+      <g id="token" class="token" style="display:none"><circle class="tk-glow" r="13"/><circle class="tk-core" r="6"/></g>
+    </svg>
+  </div>
+  <div class="tip" id="tip" role="tooltip"></div>
+  <div class="tourcard" id="tourcard" hidden></div>
+  <div class="player" id="player" hidden role="region" aria-label="Flow playback">
+    <div>
+      <div class="pl-title" id="pl-title"></div>
+      <p class="pl-step" id="pl-step" aria-live="polite"></p>
+      <div class="pl-dots" id="pl-dots" aria-hidden="true"></div>
+    </div>
+    <div class="pl-ctrl">
+      <button class="ib" id="pl-prev" type="button" aria-label="Previous step"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg></button>
+      <button class="ib main" id="pl-play" type="button" aria-label="Pause"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="pl-play-icon" d="M4 3h3v10H4zM9 3h3v10H9z"/></svg></button>
+      <button class="ib" id="pl-next" type="button" aria-label="Next step"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 3h2v10h-2zM2 3v10l8-5z"/></svg></button>
+      <button class="ib" id="pl-replay" type="button" aria-label="Replay"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5a5.5 5.5 0 1 1-5.3 7h1.6A4 4 0 1 0 5.2 5.2L7 7H2V2l2.1 2.1A5.5 5.5 0 0 1 8 2.5z"/></svg></button>
+      <span class="speed" role="group" aria-label="Playback speed">
+        <button type="button" data-s="0.5" aria-pressed="false">0.5×</button><button type="button" data-s="1" aria-pressed="true">1×</button><button type="button" data-s="2" aria-pressed="false">2×</button>
+      </span>
+      <button class="ib" id="pl-close" type="button" aria-label="Stop and show everything"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 2.4 8 6.9l4.5-4.5 1.1 1.1L9.1 8l4.5 4.5-1.1 1.1L8 9.1l-4.5 4.5-1.1-1.1L6.9 8 2.4 3.5z"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<div class="below">
+  <section class="panel" aria-labelledby="flows-h">
+    <h2 id="flows-h">Service flows</h2>
+    <p class="hint">Pick a flow to play it step by step. Flows 1 to 4 build accounts, 5 to 7 ship software, 8 to 10 watch it, 11 and 12 control access.</p>
+    <ol class="flows" id="flows"></ol>
+    <div class="row"><button class="btn" id="reset" type="button">Show everything</button></div>
+  </section>
+  <section class="panel" id="detail" aria-labelledby="detail-h"></section>
+</div>
+</main>
+<footer>TCSP reference architecture · design targets, not measured results · <a href="../README.md">Repository README</a></footer>
+<noscript><p style="padding:0 24px">This page needs JavaScript to draw the diagram. A static picture is in assets/architecture.png.</p></noscript>
+
+<script>
+(function(){
+"use strict";
+const DATA={"components":{"mgmt":{"name":"Management account","layer":"Governance","account":"tcsp-management · Organization root","owner":"Platform Engineering team","what":"The account that owns the AWS organization: the OU tree, the organization policies, Control Tower, sign-in and consolidated billing. It runs no workloads.","why":"Every rule that no project may override needs a home that projects cannot reach. Keeping that home empty of workloads keeps its attack surface and its list of admins as small as possible.","accommodates":"One organization of any size, from a handful of accounts to several hundred, with one payer and one place to set policy. Use it for organization-wide settings, billing and identity only. Do not use it for applications, CI runners, shared tools or experiments, even temporarily.","flows":[2,10,11,12],"guardrails":"SCPs never apply to the management account itself, so it is protected by access, not policy: only the PlatformAdmin and BreakGlass permission sets reach it, root user MFA is hardware-backed, and every sign-in raises an alert in tcsp-audit.","file":"management-account"},"org":{"name":"AWS Organizations","layer":"Governance","account":"tcsp-management · Organization root","owner":"Platform Engineering team","what":"The AWS service that groups every TCSP account into one organization and a tree of OUs, and attaches policies to that tree.","why":"Without an organization each account is configured by hand and drifts. With one, a policy attached once to an OU applies to every account under it, including accounts created later.","accommodates":"Hundreds of accounts, nested OUs up to five levels deep, and policy types that cover principals (SCPs), resources (RCPs) and service settings (declarative policies). Use it as the single place where account membership and inheritance are decided. It is not a place for per-application configuration.","flows":[2,11,12],"guardrails":"Root SCPs deny leaving the organization (organizations:LeaveOrganization) and protect the baseline roles. Changes to the OU tree or to policies only come through the tcsp-org pipeline.","file":"aws-organizations"},"ous":{"name":"OU structure","layer":"Governance","account":"tcsp-management · Root, Security, Infra, Project (Prod, Non-Prod, Migration) and AFT OUs","owner":"Platform Engineering team","what":"The four top-level organizational units, Security, Infra, Project and AFT, plus Prod, Non-Prod and a temporary Migration OU under Project.","why":"Different kinds of accounts need different limits. Grouping them by purpose lets one policy set cover a whole group and keeps shared infrastructure apart from project workloads.","accommodates":"Any number of project accounts without new policy work: a new account inherits everything by landing in the right OU. Prod and Non-Prod let production carry stricter rules. The Migration OU gives accounts arriving from another organization a checked landing spot before promotion. Add a new OU only when a group of accounts truly needs different rules, not for each team or department.","flows":[2,12],"guardrails":"Root SCPs apply to every OU. Security OU locks log and detector settings. Infra OU limits network and CI changes to pipeline roles. Project OU blocks network bypass and public data. Project / Prod adds stricter production rules. AFT OU allows only the factory roles.","file":"ou-structure"},"scp":{"name":"SCPs, RCPs and declarative policies","layer":"Governance","account":"tcsp-management · attached to Root and to each OU","owner":"Platform Engineering team, with Security","what":"Organization policies that set the outer limit of what can happen in a member account. SCPs cap what principals may do, RCPs cap what may be done to resources, and declarative policies fix service settings across the organization.","why":"They are what makes 'guardrails, not gates' possible. Teams can hold full admin rights inside their account because a small set of organization policies blocks the few actions that would break shared security.","accommodates":"Hard, organization-wide limits that must hold even for an account admin: approved Regions, protected logging and detection, no network bypass, no public data, stricter production rules. Use them for rules that are simple, universal and rarely excepted. Do not use them for fine-grained, per-application permissions, which belong in IAM inside the account.","flows":[2,12],"guardrails":"This component is the preventive guardrail layer (layer 1). The starter set and its OU targets are listed in docs/01-guardrails.md.","file":"service-control-policies"},"ct":{"name":"AWS Control Tower","layer":"Governance","account":"tcsp-management · Organization root","owner":"Platform Engineering team","what":"The AWS service that sets up and runs the landing zone: it creates accounts through Account Factory, places them in OUs, and applies its own baseline and controls.","why":"Building a landing zone by hand is slow and error-prone. Control Tower gives every new account the same starting point, logs and controls without manual steps.","accommodates":"Account creation at any pace AFT sends requests, enrollment of existing accounts, and preventive (SCP-based), detective (Config rule) and proactive (CloudFormation hook) controls managed per OU. It suits organizations that want AWS-managed landing-zone upgrades. It is not where account-specific Terraform runs; that is AFT's job.","flows":[2,8],"guardrails":"Root SCPs protect the AWSControlTowerExecution role and Control Tower resources in member accounts. Landing-zone drift is reported and must be repaired before the next update.","file":"control-tower"},"idc":{"name":"IAM Identity Center and permission sets","layer":"Governance","account":"tcsp-management · Organization root (administration can be delegated)","owner":"Platform Engineering team","what":"The only way people sign in to TCSP accounts. Users and groups come from the company identity provider, and permission sets turn group membership into roles in each account.","why":"Per-account IAM users and shared passwords are hard to audit and impossible to revoke quickly. One sign-in path tied to the company directory means joiners, movers and leavers are handled in one place.","accommodates":"Thousands of users across hundreds of accounts, short-lived credentials for console and CLI, and group-based access that follows people as they change teams. Use it for all human access. Workloads and pipelines use IAM roles, not Identity Center.","flows":[5,11],"guardrails":"Root SCP denies creating IAM users and access keys in Prod. BreakGlass use raises an alert. Permission-set changes go only through the tcsp-org pipeline.","file":"iam-identity-center"},"ctbase":{"name":"CT Baseline","layer":"Governance","account":"every member account · all OUs","owner":"Platform Engineering team","what":"What Control Tower installs in every account it creates or enrolls: the organization trail, the Config recorder, the execution roles and the controls enabled on the account's OU.","why":"Logging and recording must exist from the first minute of an account's life, before any team has touched it. The CT Baseline guarantees that without any project work.","accommodates":"Every account type, new or enrolled, in every governed Region. It is deliberately small and AWS-managed, so it is the same everywhere. Settings that TCSP chooses for itself go in the TF Baseline instead.","flows":[2,8],"guardrails":"The 'protect the baseline' SCP denies changes to CloudTrail, Config and Control Tower roles. Drift is detected and reported by Control Tower.","file":"ct-baseline"},"tfbase":{"name":"TF Baseline","layer":"Governance","account":"every member account · all OUs (applied from aft-global-customizations)","owner":"Platform Engineering team","what":"The Terraform baseline that AFT applies to every account after Control Tower creates it: the TCSP security defaults, alarms, and the hooks for observability and cost.","why":"Security settings written as code in one baseline replace per-team checklists and tickets. Every account starts with the same safe defaults, and a fix to the baseline reaches every account.","accommodates":"Defaults that every account needs regardless of workload: S3 Block Public Access, EBS default encryption, IAM password policy, default-VPC removal, IMDSv2 defaults, security alarms, observability integration roles, metric streams and a budget. Project-specific settings do not belong here; they go in account customizations or the team's own IaC.","flows":[2,10],"guardrails":"Plans are checked by Sentinel or OPA policies before apply. The 'protect the baseline' SCP stops teams from undoing the settings it creates. Config rules detect drift.","file":"tf-baseline"},"aftacct":{"name":"AFT management account","layer":"Provisioning","account":"tcsp-aft-management · AFT OU","owner":"Platform Engineering team","what":"The account that runs Account Factory for Terraform (AFT): the pipelines, queue and state that turn a Git request into a governed account, plus the Service Catalog portfolio of best-practice templates.","why":"Account vending needs powerful roles. Putting that machinery in its own account, under its own OU and SCP, keeps those roles away from both the management account and project accounts.","accommodates":"A steady stream of account requests and baseline changes, from a few a month to many a day, with requests queued rather than dropped. Use it only for AFT and the template portfolio. Do not run shared tools or CI here.","flows":[1,2,3,4],"guardrails":"The AFT OU SCP denies everything except the AFT service roles and break-glass. Only the Platform Engineering team has a permission set here.","file":"aft-management-account"},"aftpipe":{"name":"AFT pipeline","layer":"Provisioning","account":"tcsp-aft-management · AFT OU","owner":"Platform Engineering team","what":"The automation inside the AFT account: CodePipeline and CodeBuild run Terraform, a DynamoDB table and an SQS FIFO queue hold account requests, Lambda talks to Control Tower, and Step Functions runs the provisioning framework.","why":"It replaces console clicks and hand-offs between teams with one repeatable path. The same steps run for every account, so the result does not depend on who handled the request.","accommodates":"Many requests at once, retried safely from the queue; updates to existing accounts when a request or a customization changes; and re-applying customizations when an account moves between OUs. It is not a general CI system for applications.","flows":[1,2,3],"guardrails":"Terraform plans are checked by policy as code before apply. Plan-only mode lets reviewers see changes before they reach accounts. The AFT OU SCP limits who can change the pipeline.","file":"aft-pipeline"},"aftrepos":{"name":"Platform VCS and the four AFT repositories","layer":"Provisioning","account":"Platform VCS (outside AWS, or in tcsp-shared-services)","owner":"Platform Engineering team","what":"The Git repositories that define the platform: aft-account-request, aft-account-provisioning-customizations, aft-global-customizations and aft-account-customizations, alongside tcsp-org, tcsp-network and tcsp-policies.","why":"When every account and setting is a file in Git, review and merge replace separate approval tickets, history is the audit trail, and rollback is a revert.","accommodates":"One small file per account request, provisioning hooks (for example registering the account in a CMDB or updating the ITSM ticket), one global baseline, and named customization sets such as project-standard, network and shared-ci. Settings specific to one application stay in that team's own repository.","flows":[1,2,3],"guardrails":"Branch protection with required reviewers, policy-as-code checks on the Terraform plan, and signed commits on the main branch.","file":"aft-repositories"},"hcp":{"name":"HCP Terraform and policy as code","layer":"Provisioning","account":"SaaS, outside AWS (one workspace per account customization)","owner":"Platform Engineering team, with Security for policies","what":"The Terraform engine that runs AFT's account customizations as workspaces, keeps remote state, and checks every plan against Sentinel or OPA policies before apply.","why":"Reviewing plans by eye does not scale to hundreds of accounts. A policy gate stops unsafe changes, such as a security group open to the internet on SSH, before they exist.","accommodates":"Hundreds of workspaces with separate state, run history and policy results that feed security monitoring. It suits teams that want a managed Terraform service with a built-in policy gate. When licence cost matters more, open-source Terraform with OPA or Conftest in CodeBuild gives a similar gate with more to operate.","flows":[3,9],"guardrails":"This component is the code-time guardrail layer (layer 3). Hard-mandatory policies cannot be overridden; soft-mandatory overrides are logged with a reason.","file":"hcp-terraform"},"svccat":{"name":"Service Catalog best-practice templates","layer":"Provisioning","account":"tcsp-aft-management · AFT OU (portfolio shared to the Project OU)","owner":"Platform Engineering team; project teams launch products","what":"A portfolio of approved infrastructure templates that project teams can launch themselves, such as the Development space, a Path A starter and a Path B starter.","why":"Teams should not each design a VPC, pipeline and logging setup from scratch. Approved templates give a fast, safe start and keep common patterns consistent.","accommodates":"Self-service launches by any project account in the Project OU, versioned products with upgrade paths, and launch constraints so a team can deploy a product without holding the permissions it uses. Use it for shared starting points. One-off application stacks belong in the team's own IaC.","flows":[4],"guardrails":"Templates pass the same policy-as-code checks as platform Terraform. Launch roles are limited to the resources each product needs.","file":"service-catalog"},"devspace":{"name":"Development space","layer":"Provisioning","account":"each project account · Project OU","owner":"Project team","what":"A pre-approved sandbox VPC and toolset that a project team launches from Service Catalog inside its own account, to experiment before choosing a delivery path.","why":"Teams want to try things on day one. A ready-made, compliant space lets them start immediately without asking for a network design or a security review.","accommodates":"Prototypes, spikes, load tests and learning, with private subnets attached to the Transit Gateway and the same logging and detection as production. It is not for production traffic and not for long-lived shared services.","flows":[4],"guardrails":"Project OU SCPs (no Internet Gateways, no VPC peering, no public data) and the TF Baseline apply. Budgets alert when spend passes the threshold.","file":"development-space"},"logarch":{"name":"Log Archive account","layer":"Security","account":"tcsp-log-archive · Security OU","owner":"Security","what":"The account that stores every account's security logs in write-once S3 buckets: CloudTrail, Config history, VPC Flow Logs and other security logs.","why":"Audit evidence is only trustworthy if the people being audited cannot change it. A separate account with locked buckets keeps logs safe even if a project account is fully compromised.","accommodates":"Logs from hundreds of accounts and every governed Region, kept for the retention your auditors require, with read access granted to investigators and tools only. It is not a log analytics platform; search and dashboards happen in the observability or SIEM tool that reads from it.","flows":[8],"guardrails":"Security OU SCP denies deleting or changing log buckets, Object Lock and lifecycle settings except from a named break-glass role. RCPs limit bucket access to the organization.","file":"log-archive-account"},"audit":{"name":"Audit account","layer":"Security","account":"tcsp-audit · Security OU","owner":"Security","what":"The account where the security team sees findings from every account: it is the delegated administrator for GuardDuty, Detective, IAM Access Analyzer, Security Hub and the Config aggregator.","why":"Detection that is set up per team is uneven and invisible to security. One delegated administrator enrolls every account automatically and gives one place to triage.","accommodates":"Organization-wide detection for hundreds of accounts, automatic enrollment of new accounts, read-only access into member accounts for investigation, and routing of findings to the owning team. It does not run workloads or fix application issues itself.","flows":[9],"guardrails":"Security OU SCP denies disabling detectors or changing delegated-admin settings except from break-glass. Only the SecurityAudit and Security admin permission sets reach this account.","file":"audit-account"},"guardduty":{"name":"Amazon GuardDuty","layer":"Security","account":"detectors in every account · delegated admin in tcsp-audit","owner":"Security","what":"Threat detection that watches CloudTrail, VPC Flow Logs, DNS logs and runtime signals in every account for signs of compromise.","why":"Prevention never catches everything. GuardDuty spots behaviour that only shows up at runtime, such as crypto-mining, credential misuse or calls from known-bad addresses.","accommodates":"Every account and Region, enabled organization-wide so new accounts join automatically, with optional protection plans for S3, EKS, runtime, RDS and Lambda. Turn on the EKS and runtime plans for accounts running Path A clusters.","flows":[9],"guardrails":"This is a detective control (layer 5). Root and Security OU SCPs deny disabling detectors or removing members.","file":"guardduty"},"detective":{"name":"Amazon Detective","layer":"Security","account":"tcsp-audit · Security OU (delegated admin)","owner":"Security","what":"An investigation service that links GuardDuty findings, CloudTrail and VPC Flow Logs into graphs, so analysts can see what happened around a finding.","why":"A finding says something is wrong; an investigation needs context. Detective cuts the time spent joining logs by hand during an incident.","accommodates":"Investigations that span accounts, with up to a year of behaviour graphs. Use it during triage of GuardDuty and Security Hub findings. It is not a detection source on its own.","flows":[9],"guardrails":"Security OU SCP protects its configuration. Access is limited to the Security team.","file":"detective"},"config":{"name":"AWS Config and Config Aggregator","layer":"Security","account":"recorders in every account · aggregator in tcsp-audit","owner":"Security","what":"Config records every resource change in every account and checks resources against rules. The aggregator in tcsp-audit shows compliance across all accounts and Regions in one view.","why":"You cannot prove compliance without a history of configuration. Config gives that history and turns drift into findings rather than surprises.","accommodates":"Continuous recording for every governed Region, managed and custom rules, conformance packs per OU, and evidence for audits. It is also the detective half of Control Tower controls. It is not a preventive control; pair it with SCPs.","flows":[8,9],"guardrails":"The 'protect the baseline' SCP denies stopping or deleting recorders and delivery channels.","file":"aws-config"},"iaa":{"name":"IAM Access Analyzer","layer":"Security","account":"tcsp-audit · Security OU (delegated admin)","owner":"Security","what":"A service that flags resources shared outside the organization and access that is granted but never used.","why":"Accidental public or cross-organization sharing is one of the most common cloud data exposures. Access Analyzer finds it continuously instead of at audit time.","accommodates":"An organization-wide external-access analyzer with the organization as the zone of trust, plus unused-access analysis to shrink roles over time, and policy validation in CI. Use it in every account; it needs no agents.","flows":[9],"guardrails":"Detective control (layer 5); also usable at code time to validate policies before merge.","file":"iam-access-analyzer"},"sechub":{"name":"Security Hub CSPM","layer":"Security","account":"tcsp-audit · Security OU (delegated admin)","owner":"Security","what":"The cloud security posture service that checks every account against security standards and collects findings from GuardDuty, Config, Access Analyzer and other tools in one place.","why":"Findings spread across many services and accounts are hard to act on. One normalized list with severity and ownership makes triage and reporting possible.","accommodates":"Central configuration of standards per OU, cross-Region aggregation, automation rules that route findings by account tag, and integration with ticketing and chat. It is a recommended addition to the core design.","flows":[9],"guardrails":"Detective control (layer 5). Security OU SCP protects its configuration.","file":"security-hub"},"trail":{"name":"CloudTrail organization trail","layer":"Security","account":"trail in tcsp-management · bucket in tcsp-log-archive","owner":"Security (operated by the Platform Engineering team)","what":"One trail that records every API call in every account and Region of the organization and writes it to the Log Archive bucket.","why":"Every investigation, audit and access review starts with who did what and when. An organization trail gives that record for every account without any team setting it up.","accommodates":"All accounts, including those created in the future, management and data events where needed, and lake or SIEM queries on top. It also records the denied calls that show guardrails at work.","flows":[8,12],"guardrails":"The 'protect the baseline' SCP denies stopping or deleting the trail. Log Archive SCPs and Object Lock protect the files.","file":"cloudtrail-org-trail"},"netacct":{"name":"Network account","layer":"Network","account":"tcsp-network · Infra OU","owner":"Platform Engineering team","what":"The account that owns all routing in TCSP: the Transit Gateway, Client VPN, the corporate link, the egress VPC, IP address management and DNS resolution.","why":"If every team builds its own network edge, nobody can see or control traffic. One network account gives one place for routing, inspection and corporate connectivity.","accommodates":"A hub-and-spoke network that grows to hundreds of VPCs without a mesh of peerings, with separate reachability for Prod, Non-Prod, shared services and remote access. Project accounts only attach to it. It does not host applications.","flows":[3,5],"guardrails":"Infra OU SCP denies Transit Gateway, Direct Connect, Client VPN and route-table changes except from the network pipeline role.","file":"network-account"},"tgw":{"name":"Transit Gateway and route tables","layer":"Network","account":"tcsp-network · Infra OU (shared to the organization with AWS RAM)","owner":"Platform Engineering team","what":"The routing hub that every VPC in TCSP attaches to, with separate route tables that decide which networks can reach which.","why":"Pairwise VPC peering does not scale and hides who can reach what. One hub with explicit route tables makes reachability a reviewed design, denied by default.","accommodates":"Hundreds of attachments, separate routing domains (Shared, Prod, Non-Prod, Access), central egress and inspection, and the corporate link. Use it for all cross-VPC and on-premises traffic. Traffic inside a single VPC never touches it.","flows":[3,5,6],"guardrails":"Infra OU SCP limits changes to the network pipeline role. Project OU SCP denies creating TGW attachments outside the platform role.","file":"transit-gateway"},"cvpn":{"name":"AWS Client VPN","layer":"Network","account":"tcsp-network · Infra OU","owner":"Platform Engineering team","what":"Authenticated remote access that lets engineers reach private TCSP resources, such as the shared VCS, without exposing them to the internet.","why":"Private-by-default workloads still need human access. Client VPN gives that access through the company identity provider, with per-group authorization and logs.","accommodates":"Engineers working from anywhere, group-based authorization rules, and connection logs for audits. With native Transit Gateway attachment, it needs no intermediate VPC and keeps each user's source IP visible. It is not an internet gateway and not a site-to-site link.","flows":[5],"guardrails":"Infra OU SCP limits endpoint changes to the network pipeline. Connection logs go to tcsp-log-archive.","file":"client-vpn"},"dx":{"name":"Direct Connect and Site-to-Site VPN","layer":"Network","account":"tcsp-network · Infra OU","owner":"Platform Engineering team","what":"The private link between TCSP and the company's data centres and corporate network, with Site-to-Site VPN as an optional backup path.","why":"Many workloads still need on-premises systems. A private, predictable link avoids sending that traffic over the internet.","accommodates":"Hybrid applications, data transfer and corporate access with steady bandwidth and latency; a VPN backup for resilience or as a quick start while the dedicated link is ordered. Skip it on day one if no workload needs on-premises access yet.","flows":[5],"guardrails":"Infra OU SCP limits changes to the network pipeline role. Routes from on-premises propagate only to approved route tables.","file":"direct-connect"},"egress":{"name":"Egress VPC (NAT + Network Firewall)","layer":"Network","account":"tcsp-network · Infra OU","owner":"Platform Engineering team","what":"A central VPC that handles outbound internet traffic for all project VPCs, through NAT Gateways and AWS Network Firewall, reached via the Transit Gateway.","why":"Per-account NAT Gateways cost more and give no central view of outbound traffic. One inspected exit makes outbound rules, logging and cost visible.","accommodates":"Outbound traffic for package downloads, SaaS APIs and updates from every project and from shared CI, with domain allow-lists and logging. Inbound public traffic does not go through it; that uses a separate, optional public entry pattern.","flows":[6],"guardrails":"Project OU SCP denies Internet Gateways, so this is the only path out. Firewall rule changes go through the network pipeline.","file":"egress-vpc"},"ipam":{"name":"VPC IPAM","layer":"Network","account":"tcsp-network · Infra OU (pools shared with AWS RAM)","owner":"Platform Engineering team","what":"IP address management that hands out non-overlapping CIDR ranges to every VPC from planned pools.","why":"Overlapping ranges make routing impossible and are expensive to fix later. Central allocation prevents them from the first VPC.","accommodates":"Pools per Region and environment, automatic allocation when AFT creates a project VPC, and checks of existing accounts before they join TCSP. It is a recommended addition to the core design.","flows":[3],"guardrails":"IPAM allocation rules enforce pool sizes. Policy-as-code checks reject VPCs created outside IPAM.","file":"vpc-ipam"},"r53":{"name":"Route 53 Resolver","layer":"Network","account":"tcsp-network · Infra OU (rules shared with AWS RAM)","owner":"Platform Engineering team","what":"Central DNS resolution: inbound and outbound Resolver endpoints in the network account, with forwarding rules shared to every VPC.","why":"Hybrid name resolution set up per account is inconsistent and fragile. Central endpoints and shared rules give every VPC the same view of corporate and AWS names.","accommodates":"Resolving corporate names from TCSP, resolving private TCSP names from the corporate network, private hosted zones shared across accounts, and DNS Firewall rules. It is a recommended addition to the core design.","flows":[5],"guardrails":"Rule changes only through the network pipeline. DNS query logs can be sent to tcsp-log-archive.","file":"route53-resolver"},"sharedacct":{"name":"Shared account","layer":"Delivery","account":"tcsp-shared-services · Infra OU","owner":"Platform Engineering team","what":"The account that hosts tools every project uses: the shared VCS for application code, the shared CI cluster on EKS and the shared container registry.","why":"Running one secured copy of each developer tool is cheaper and safer than every team running its own. Teams get working tools on day one instead of building them.","accommodates":"Many projects at once, each isolated by repository permissions, CI namespaces and registry repositories. Private subnets in two AZs keep tools off the internet. It is not a place for project workloads or project-specific databases.","flows":[5,6],"guardrails":"Infra OU SCP limits cluster and network changes to pipeline roles. Project teams have no admin permission set here.","file":"shared-account"},"vcs":{"name":"Shared VCS","layer":"Delivery","account":"tcsp-shared-services · Infra OU","owner":"Platform Engineering team operates it; project teams own their repositories","what":"The Git service for application code and deployment manifests, reached privately over Client VPN and the Transit Gateway.","why":"One Git service with company sign-in, branch protection and audit logs replaces team-run repositories with uneven controls.","accommodates":"Repositories for every project, group-based access from the company IdP, merge-request reviews, and webhooks that trigger shared CI. Path B teams may use CodeCommit in their own account instead.","flows":[5,6],"guardrails":"Branch protection, required reviews, secret scanning on push. Network access only through Client VPN and the Shared route table.","file":"shared-vcs"},"ci":{"name":"Shared CI on EKS","layer":"Delivery","account":"tcsp-shared-services · Infra OU","owner":"Platform Engineering team","what":"One CI system every project uses, so teams do not each build and secure their own runners. Build, test, source scan, image scan and SBOM generation run as pods on a shared EKS cluster.","why":"Per-team CI means duplicated effort, uneven security scanning and runners holding credentials in many places. A shared, hardened CI gives every team the same checks without the upkeep.","accommodates":"Container workloads and teams that ship often. Many projects at once, each isolated by namespace and runner tags, with runners that scale with demand across two AZs. It hands off to each project's CD instead of deploying into project accounts itself, so it never holds project admin credentials.","flows":[6],"guardrails":"This component carries the delivery-time guardrail layer (layer 4): builds fail on critical vulnerabilities or found secrets. Infra OU SCP limits cluster changes. Runners use per-namespace IAM roles with push rights only to their project's ECR repositories.","file":"shared-ci-eks"},"ecr":{"name":"Amazon ECR (shared registry)","layer":"Delivery","account":"tcsp-shared-services · Infra OU","owner":"Platform Engineering team","what":"The container registry that stores images built by shared CI, readable only from accounts in the TCSP organization.","why":"Pulling images from public registries at deploy time is slow and risky. A private registry with scanning and an organization-only policy keeps what runs in TCSP known.","accommodates":"One repository per service, image scanning on push, immutable tags, lifecycle rules, and pulls from project EKS and ECS clusters across accounts. Path B teams can also keep a registry in their own account. It is a recommended addition to the core design.","flows":[6],"guardrails":"Repository policies limit pulls to the organization; RCPs back this up. Enhanced scanning findings flow to Security Hub.","file":"ecr"},"projacct":{"name":"Project account","layer":"Delivery","account":"tcsp-prj-\u003cname>-\u003cenv> · Project OU / Prod or Non-Prod","owner":"Project team, within the guardrails","what":"An AWS account per project and environment, where a team builds and runs its application with admin rights inside the account.","why":"An account is the strongest isolation boundary AWS offers. A mistake or breach in one project cannot reach another's resources, and cost lands per account without tagging work.","accommodates":"Any team size, from one service to many, with either delivery path: Path A on a project EKS cluster or Path B to ECS. Prod and Non-Prod are separate accounts. Accounts arrive with both baselines, a VPC attached to the Transit Gateway, observability and budgets already wired in.","flows":[2,3,4,6,7,11,12],"guardrails":"Root and Project OU SCPs (Region allow-list, protected baseline, no network bypass, no public data), stricter Prod SCPs, the TF Baseline, policy-as-code on platform Terraform, CI scans, and central detection.","file":"project-account"},"cd":{"name":"CD on project EKS (Path A)","layer":"Delivery","account":"each project account · Project OU","owner":"Project team (the Platform Engineering team provides the template)","what":"A pull-based delivery tool, such as Argo CD, running in the project's own EKS cluster. It watches the manifest repository and deploys new image tags.","why":"If shared CI pushed into project accounts it would need admin credentials for every project. Pulling from inside the account keeps the account boundary intact and makes Git the record of what runs.","accommodates":"Teams with many microservices or existing Kubernetes skills, progressive delivery (canary, blue/green with Argo Rollouts), and many environments driven from one repository. Small teams without Kubernetes skills are better served by Path B.","flows":[6],"guardrails":"Admission policies (for example Kyverno or OPA Gatekeeper) block privileged pods and unsigned images. Project OU SCPs apply to the cluster's IAM roles. GuardDuty EKS and runtime protection watch the cluster.","file":"cd-project-eks"},"pathb":{"name":"CodePipeline to ECS (Path B)","layer":"Delivery","account":"each project account · Project OU","owner":"Project team","what":"An AWS-native pipeline that runs entirely inside one project account: CodeCommit, CodeBuild, CodeDeploy and an ECS service on Fargate.","why":"Not every team wants to run Kubernetes. This path gives a managed container runtime and a managed pipeline with nothing shared to depend on.","accommodates":"Small teams with a few services, no Kubernetes skills and a wish for fewer moving parts. Blue/green deployments roll back automatically on failed health checks. Teams with many services or existing Kubernetes practice are better on Path A.","flows":[7],"guardrails":"Project OU SCPs, the TF Baseline, scans in CodeBuild, ECR image scanning, and the same detection as every account.","file":"codepipeline-ecs"},"obs":{"name":"Observability platform","layer":"Observability","account":"SaaS (for example New Relic, Datadog or Grafana Cloud) · integration roles in every account","owner":"Platform Engineering team for the platform; project teams for their apps","what":"The tool where metrics, logs, traces and user-experience data from every account come together, with SLI and SLO dashboards per project.","why":"Teams cannot run what they cannot see, and the platform team cannot run shared parts blind. Wiring observability in at account creation means it works from day one.","accommodates":"Platform monitoring (Transit Gateway, AFT, shared CI) and application monitoring per project, with each project in its own sub-account or workspace and admin rights delegated to the team. New Relic is one option among others.","flows":[10],"guardrails":"Integration roles are read-only and created by the TF Baseline. The 'protect the baseline' SCP keeps them in place.","file":"observability-platform"},"secmon":{"name":"Security monitoring","layer":"Observability","account":"tcsp-audit (Security Hub) and an optional external CSPM or SIEM","owner":"Security","what":"The place where findings from the Audit account and policy results from HCP Terraform are triaged and routed to the team that must act.","why":"Findings that reach nobody fix nothing. Routing each finding to its owner with context turns detection into action.","accommodates":"Findings from every account, policy-check results from Terraform runs, routing by account tag to team channels and tickets, and escalation for critical findings. It can be Security Hub alone or an external CSPM or SIEM fed by it.","flows":[9],"guardrails":"Part of the detective layer (layer 5). Its configuration is owned by Security.","file":"security-monitoring"},"cost":{"name":"Cost management","layer":"Observability","account":"tcsp-management (CUR 2.0, Cost Explorer) · budgets in every account","owner":"Platform Engineering team, with Finance","what":"Cost reporting and control for TCSP: the Cost and Usage Report, Cost Explorer, a budget per account created by AFT, and a charge-back model for shared costs.","why":"Without per-project cost visibility, cloud spend surprises everyone at month end. Accounts per project make cost attribution simple; budgets make it visible early.","accommodates":"Per-account and per-tag reporting, budgets and anomaly alerts per project, and fair splitting of shared costs such as Transit Gateway processing, NAT, observability ingest, Terraform runs and the shared CI cluster.","flows":[10],"guardrails":"Budgets and anomaly detection are created by the baseline; Region allow-list SCPs prevent spend in unexpected Regions.","file":"cost-management"},"pe":{"name":"Platform Engineering team","layer":"People","account":"outside AWS · works through the platform VCS","owner":"Platform Engineering team","what":"The people who build and run TCSP's shared parts: the organization and its policies, the account factory, the network, shared CI and the templates. They change the platform only by pushing Terraform to the platform VCS.","why":"A platform needs an owner. Working through Git, not tickets, keeps the team from becoming an approval queue and makes every change reviewable.","accommodates":"Account requests reviewed as merge requests, baseline and policy changes rolled out in stages, support for project teams on request, and on-call for AFT, the Transit Gateway and shared CI. They do not run project applications; teams own their own workloads.","flows":[1,2,3],"guardrails":"Their changes pass the same branch protection and policy-as-code checks as anyone's. Management-account access is limited and alarmed.","file":"platform-engineering-team"}},"flows":[{"n":1,"name":"Platform change","short":"The Platform Engineering team pushes Terraform to the platform VCS; the merge triggers AFT.","owner":"Platform Engineering team","intro":"Every change to the platform, from a new account to a new SCP, starts as a merge request. Review and merge are the approval.","steps":[{"at":"pe","text":"A request arrives through ITSM. The Platform Engineering team writes it as a short Terraform file."},{"w":"w1a","text":"They push the change to the platform VCS and open a merge request."},{"at":"pvcs","text":"Review and merge are the approval; there is no separate ticket chain."},{"w":"w1b","text":"The merge webhook starts the AFT pipeline in the AFT management account."},{"at":"codebuild","text":"CodeBuild runs the Terraform plan and apply for the repository that changed."}],"also":["box-aft"]},{"n":2,"name":"Account vending","short":"AFT asks Control Tower to create the account; it lands in its OU with the CT Baseline, then AFT adds the TF Baseline.","owner":"Platform Engineering team","intro":"This is the flow that turns an approved request into a governed account without anyone clicking in the console.","steps":[{"at":"queue","text":"The merged account request is stored in DynamoDB and waits its turn in an SQS FIFO queue."},{"w":"w2a","text":"AFT asks Control Tower Account Factory to create the account."},{"w":"w2c","text":"Control Tower creates the account in its target OU, here Project / Non-Prod, and applies the CT Baseline."},{"w":"w2b","text":"Control Tower reports the account as created back to AFT."},{"at":"stepfn","text":"Step Functions runs the provisioning framework: execution role, tags and provisioning customizations."},{"w":"w2d","text":"AFT applies the TF Baseline to the new account with Terraform. The account is ready."}],"also":["ct","pj-ct","pj-tf","box-proj","box-mgmt","ou-proj","org","scp-proj"]},{"n":3,"name":"Additional customizations","short":"AFT hands account customizations to HCP Terraform, which checks policy and applies them into the account.","owner":"Platform Engineering team","intro":"After the baseline, each account gets its named customization set, checked by policy as code before anything is applied.","steps":[{"w":"w3a","text":"AFT sends the account's customization set, for example project-standard, to an HCP Terraform workspace."},{"at":"hcp","text":"Terraform plans the change and Sentinel or OPA policies check it. A failed check stops the run."},{"w":"w3b","text":"On a pass, HCP Terraform applies the customizations into the project account."},{"at":"ipam","text":"The project VPC gets a non-overlapping address range from VPC IPAM."},{"w":"w3c","text":"The VPC attaches to the Transit Gateway and joins the right route table."}],"also":["box-proj","tgw","pe","box-net"]},{"n":4,"name":"Template deploy","short":"Service Catalog deploys a best-practice template as the project's Development space.","owner":"Project team","intro":"Teams start from approved templates instead of designing a network and toolset from scratch.","steps":[{"at":"svccat","text":"The best-practice template portfolio is shared from the AFT account to the Project OU."},{"w":"w4","text":"The project team launches the Development space product from its own account."},{"at":"devspace","text":"A pre-approved VPC and toolset appears, inside the account guardrails and ready to use."}],"also":["box-proj","box-aft"]},{"n":5,"name":"Engineer access","short":"Client VPN through the Transit Gateway to the shared VCS and private resources.","owner":"Platform Engineering team (network)","intro":"Workloads are private by default. Engineers reach them through one authenticated, logged path.","steps":[{"at":"cvpn","text":"An engineer connects with Client VPN, signing in through the company identity provider."},{"w":"w5a","text":"Client VPN hands the traffic to the Transit Gateway."},{"at":"tgw","text":"The Access route table allows only the networks that the engineer's group is authorized for."},{"at":"r53","text":"Route 53 Resolver answers private names, such as the VCS host and corporate domains."},{"w":"w5b","text":"The engineer reaches the shared VCS and other private resources."}],"also":["dx","s2s","w5c","idc","box-net","box-shared"]},{"n":6,"name":"Container delivery (Path A)","short":"VCS → CI on shared EKS → image to ECR → CD on the project's EKS cluster.","owner":"Shared CI: Platform Engineering team. CD and app: project team","intro":"The container path: one shared, hardened CI, and a pull-based CD inside each project account.","steps":[{"at":"vcs","text":"An engineer pushes code to the project's repository in the shared VCS."},{"w":"w6a","text":"The push starts a CI job on the shared EKS cluster."},{"at":"ci","text":"Runner pods build the image, run tests, scan source and image, and create an SBOM."},{"w":"w6b","text":"The scanned image is pushed to ECR, readable only inside the organization."},{"w":"w6c","text":"CI updates the image tag in the manifest repository. It never deploys into the project account itself."},{"at":"cd","text":"Argo CD in the project's EKS cluster pulls the change and deploys the new version."}],"also":["egress","tgw","w3c","box-shared","box-proj"]},{"n":7,"name":"AWS-native delivery (Path B)","short":"CodeCommit → CodeBuild → CodeDeploy → ECS inside one project account.","owner":"Project team","intro":"The managed path for teams that do not want to run Kubernetes. Everything stays inside one project account.","steps":[{"at":"commit","text":"Code is pushed to CodeCommit in the project account."},{"w":"w7a","text":"CodePipeline starts CodeBuild to build, test and scan, and to push the image to the project's ECR."},{"w":"w7b","text":"CodeDeploy receives the new task definition."},{"w":"w7c","text":"CodeDeploy shifts traffic to the new ECS task set, blue/green."},{"at":"ecs","text":"If health checks fail, traffic shifts back automatically."}],"also":["pbuild","deploy","box-proj"]},{"n":8,"name":"Logging","short":"CloudTrail, Config and flow logs from every account land in Log Archive.","owner":"Security (operated by the Platform Engineering team)","intro":"Audit evidence is collected from the first minute of every account's life, into storage nobody can quietly change.","steps":[{"at":"trail","text":"The organization trail records every API call in every account and Region."},{"at":"config","text":"Config recorders in every account record each resource change."},{"w":"w8a","text":"Both deliver to S3 buckets in the Log Archive account."},{"w":"w8b","text":"VPC Flow Logs and other security logs from project, network and shared accounts arrive there too."},{"at":"logs","text":"Object Lock keeps logs write-once: accounts can write, but nobody can read, change or delete them without break-glass."}],"also":["ct","box-logarch","lg-ct","pj-ct","box-mgmt"]},{"n":9,"name":"Security findings","short":"GuardDuty, Detective, Access Analyzer and Config feed Audit, then security monitoring.","owner":"Security detects; the project team fixes application issues","intro":"Detection is switched on for every account automatically, and every finding has somewhere to go.","steps":[{"at":"guardduty","text":"GuardDuty, Access Analyzer and Config rules evaluate every account continuously."},{"w":"w9a","text":"Findings from every account go to the delegated administrators in the Audit account."},{"at":"sechub","text":"Security Hub collects, scores and deduplicates them. Detective helps investigate."},{"w":"w9b","text":"Security monitoring receives the findings, together with Terraform policy results."},{"at":"secmon","text":"Each finding is routed to the owning team by account tag, and Security tracks it to closure."}],"also":["detective","iaa","cfgagg","hcp","w9c","w9d","box-audit"]},{"n":10,"name":"Telemetry and cost","short":"Every account reports to observability and cost management.","owner":"Shared: Platform Engineering team for the platform, project teams for their apps","intro":"Observability and cost tracking are wired in by the baseline, so they work on day one.","steps":[{"at":"pj-tf","text":"The TF Baseline installs read-only observability roles, metric streams and a budget in every account."},{"w":"w10a","text":"Metrics, logs and traces stream to the observability platform."},{"at":"obs","text":"Dashboards start from SLI and SLO scores and drill down to services and resources."},{"w":"w10b","text":"Cost and usage data, tagged per account, flows to cost management."},{"at":"cost","text":"Budgets and anomaly alerts warn the project team; shared costs are charged back."}],"also":["box-proj","box-mgmt"]},{"n":11,"name":"Sign-in","short":"Company IdP → IAM Identity Center → permission set role in the account.","owner":"Platform Engineering team","intro":"One sign-in path for every person and every account, tied to the company directory.","steps":[{"at":"idc","text":"An engineer signs in with the company identity provider and MFA. Groups sync to Identity Center over SCIM."},{"w":"w11b","text":"They pick an account and a permission set such as ProjectAdmin. Identity Center issues short-lived credentials for that role."},{"at":"box-proj","text":"The session runs as a role in that account only, and every action is logged under the engineer's own name."}],"also":["org","w11a","box-mgmt","cvpn"]},{"n":12,"name":"Guardrail check","short":"SCPs on the OU path cap every API call, even an admin's.","owner":"Automatic","intro":"Admin inside your account, hard limits outside it. This is how the two fit together on every single call.","steps":[{"at":"box-proj","text":"A ProjectAdmin calls an AWS API, for example to create an Internet Gateway. IAM allows it: the role is admin."},{"w":"w12a","text":"AWS then evaluates the SCPs and RCPs on the account's OU path: Non-Prod, Project, then Root."},{"at":"scp-proj","text":"The Project OU SCP denies Internet Gateways outside the platform role, so the call is denied."},{"at":"org","text":"Root policies, such as the Region allow-list and the protected baseline, apply to every account the same way."},{"at":"trail","text":"The denied call is recorded in CloudTrail. Only calls that every layer allows actually run."}],"also":["ou-proj","box-mgmt","idc"]}],"tour":[{"before":1,"layer":"Provisioning","text":"Provisioning: a Git merge becomes a governed account, with no console clicks."},{"before":5,"layer":"Network","text":"Network: one hub, private by default, with routes denied unless they are designed in."},{"before":6,"layer":"Delivery","text":"Delivery: two golden paths from a push to a running service."},{"before":8,"layer":"Security","text":"Security: logs and findings from every account, collected centrally from day one."},{"before":10,"layer":"Observability","text":"Observability: telemetry and cost, wired in by the baseline."},{"before":11,"layer":"Governance","text":"Governance: who can sign in, and the hard limits no account can cross."}]};
+const C=DATA.components, FLOWS=DATA.flows, TOUR=DATA.tour;
+const FLOW=Object.fromEntries(FLOWS.map(f=>[f.n,f]));
+const NS="http://www.w3.org/2000/svg";
+const LAYERS=["Governance","Provisioning","Security","Network","Delivery","Observability"];
+const LK={Governance:"gov",Provisioning:"prov",Security:"sec",Network:"net",Delivery:"del",Observability:"obs",People:"ppl"};
+const reduce=window.matchMedia("(prefers-reduced-motion: reduce)");
+const params=new URLSearchParams(location.search);
+const root=document.documentElement;
+const $=id=>document.getElementById(id);
+const svg=$("arch"), stage=$("stage"), tip=$("tip");
+const L={ctr:$("layer-ctr"),wire:$("layer-wire"),chip:$("layer-chip")};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const firstSentence=s=>{const m=/^(.+?[.!?])(\s|$)/.exec(s);return m?m[1]:s;};
+function el(tag,attrs,parent,text){const e=document.createElementNS(NS,tag);for(const k in attrs){if(attrs[k]!==undefined&&attrs[k]!==null)e.setAttribute(k,attrs[k]);}if(text!==undefined)e.textContent=text;if(parent)parent.appendChild(e);return e;}
+
+/* ---------- theme ---------- */
+const themeBtn=$("theme");
+function curTheme(){return root.dataset.theme||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");}
+function applyTheme(t){if(t==="light"||t==="dark")root.dataset.theme=t;else delete root.dataset.theme;themeBtn.textContent=curTheme()==="dark"?"Light theme":"Dark theme";}
+let stored=null;try{stored=localStorage.getItem("tcsp-theme");}catch(e){}
+applyTheme(params.get("theme")||stored);
+themeBtn.addEventListener("click",()=>{const t=curTheme()==="dark"?"light":"dark";applyTheme(t);try{localStorage.setItem("tcsp-theme",t);}catch(e){}});
+if(params.get("view")==="diagram")document.body.classList.add("shot");
+
+/* ---------- geometry (data) ---------- */
+// containers: x,y,w,h,title,class,opts
+const CONTAINERS=[
+ [50,72,820,320,"Management account","ctr",{sub:"tcsp-management · no workloads"}],
+ [262,170,420,210,"Organizational units","ctr2",{sub:"each OU carries its SCPs"}],
+ [700,96,155,288,"Account provisioning","ctr2"],
+ [885,72,430,320,"AFT management account","ctr",{sub:"tcsp-aft-management · AFT OU"}],
+ [905,108,390,150,"Account customizations","ctr2"],
+ [905,268,390,114,"Best-practice IaC templates","ctr2"],
+ [44,440,306,520,"Security OU","ctr dash",{rx:10}],
+ [62,468,272,196,"Log Archive account","ctr",{sub:"tcsp-log-archive"}],
+ [62,676,272,276,"Audit account","ctr",{sub:"tcsp-audit"}],
+ [365,440,260,510,"Network account","ctr",{sub:"tcsp-network · Infra OU"}],
+ [378,556,234,100,"Private subnets","ctr2"],
+ [378,752,234,108,"Corporate link","ctr2",{sub:"optional on day one"}],
+ [640,440,335,510,"Shared account","ctr",{sub:"tcsp-shared-services · Infra OU"}],
+ [653,556,309,384,"Private subnets · two AZs","ctr2"],
+ [668,676,279,256,"","ctr"],
+ [1006,456,305,494,"","ctr"],[998,448,305,494,"","ctr"],
+ [990,440,305,494,"Project account","ctr",{sub:"tcsp-prj-<name>-<env>"}],
+ [1004,548,278,136,"Path B · CodePipeline to ECS","ctr2"],
+ [1004,696,278,226,"Path A · Amazon EKS project cluster","ctr2"]
+];
+// chips: id, component, cx, top, label, abbr, opts   (kind: icon (default) | ext | big | dev | acct)
+const CHIPS=[
+/*chip*/["box-mgmt","mgmt",0,0,"Management account","",{kind:"acct",x:50,y:72,w:820,h:320}],
+/*chip*/["box-aft","aftacct",0,0,"AFT management account","",{kind:"acct",x:885,y:72,w:430,h:320}],
+/*chip*/["box-logarch","logarch",0,0,"Log Archive account","",{kind:"acct",x:62,y:468,w:272,h:196}],
+/*chip*/["box-audit","audit",0,0,"Audit account","",{kind:"acct",x:62,y:676,w:272,h:276}],
+/*chip*/["box-net","netacct",0,0,"Network account","",{kind:"acct",x:365,y:440,w:260,h:510}],
+/*chip*/["box-shared","sharedacct",0,0,"Shared account","",{kind:"acct",x:640,y:440,w:335,h:510}],
+/*chip*/["box-proj","projacct",0,0,"Project account","",{kind:"acct",x:990,y:440,w:305,h:494}],
+/*chip*/["pe","pe",0,0,"Platform Engineering team","",{kind:"ext",x:1400,y:70,w:170,h:48,sub:"changes the platform through Git"}],
+/*chip*/["pvcs","aftrepos",0,0,"Platform VCS","",{kind:"ext",x:1400,y:150,w:170,h:56,sub:"AFT repos · tcsp-org · policies"}],
+/*chip*/["hcp","hcp",0,0,"HCP Terraform","",{kind:"ext",x:1400,y:326,w:170,h:62,sub:"remote state · Sentinel / OPA"}],
+/*chip*/["secmon","secmon",0,0,"Security monitoring","",{kind:"ext",x:1400,y:600,w:170,h:58,sub:"findings routed to owners"}],
+/*chip*/["cost","cost",0,0,"Cost management","",{kind:"ext",x:1400,y:690,w:170,h:58,sub:"CUR 2.0 · budgets per account"}],
+/*chip*/["obs","obs",0,0,"Observability","",{kind:"ext",x:1400,y:780,w:170,h:58,sub:"SLI / SLO · e.g. New Relic"}],
+/*chip*/["idc","idc",150,180,"IAM Identity\nCenter","IdC",{sub:"company IdP"}],
+/*chip*/["org","org",466,92,"AWS Organizations","Org",{w:120}],
+/*chip*/["ou-sec","ous",312,206,"Security OU","OU",{}],
+/*chip*/["ou-infra","ous",412,206,"Infra OU","OU",{}],
+/*chip*/["ou-proj","ous",512,206,"Project OU","OU",{w:96,sub:"Prod · Non-Prod · Migration"}],
+/*chip*/["ou-aft","ous",612,206,"AFT OU","OU",{}],
+/*chip*/["scp-sec","scp",312,292,"SCP","SCP",{}],
+/*chip*/["scp-infra","scp",412,292,"SCP","SCP",{}],
+/*chip*/["scp-proj","scp",512,292,"SCP + RCP","SCP",{}],
+/*chip*/["scp-aft","scp",612,292,"SCP","SCP",{}],
+/*chip*/["ct","ct",777,124,"Control Tower","CT",{}],
+/*chip*/["config","config",777,212,"Config","Cfg",{}],
+/*chip*/["trail","trail",777,300,"CloudTrail","Trl",{sub:"organization trail"}],
+/*chip*/["codebuild","aftpipe",975,140,"CodeBuild","CB",{}],
+/*chip*/["stepfn","aftpipe",1095,140,"Step Functions","SFN",{}],
+/*chip*/["queue","aftpipe",1215,140,"DynamoDB + SQS","Q",{w:100,sub:"request queue"}],
+/*chip*/["svccat","svccat",1100,298,"Service Catalog","SC",{w:120,sub:"best-practice templates"}],
+/*chip*/["lg-ct","ctbase",115,512,"CT Baseline","CT",{}],
+/*chip*/["lg-tf","tfbase",198,512,"TF Baseline","TF",{}],
+/*chip*/["logs","logarch",281,512,"Security logs","S3",{sub:"Object Lock"}],
+/*chip*/["au-ct","ctbase",115,716,"CT Baseline","CT",{}],
+/*chip*/["au-tf","tfbase",198,716,"TF Baseline","TF",{}],
+/*chip*/["detective","detective",281,716,"Detective","Det",{}],
+/*chip*/["guardduty","guardduty",115,800,"GuardDuty","GD",{}],
+/*chip*/["cfgagg","config",198,800,"Config\nAggregator","Agg",{}],
+/*chip*/["iaa","iaa",281,800,"IAM Access\nAnalyzer","IAA",{}],
+/*chip*/["sechub","sechub",115,884,"Security Hub","SH",{add:true}],
+/*chip*/["nw-ct","ctbase",440,486,"CT Baseline","CT",{}],
+/*chip*/["nw-tf","tfbase",550,486,"TF Baseline","TF",{}],
+/*chip*/["cvpn","cvpn",440,584,"Client VPN","VPN",{}],
+/*chip*/["r53","r53",555,584,"Route 53 Resolver","R53",{add:true,w:104,sub:"DNS endpoints"}],
+/*chip*/["tgw","tgw",495,668,"Transit Gateway","TGW",{w:100,sub:"RAM-shared hub"}],
+/*chip*/["dx","dx",440,796,"Direct Connect","DX",{}],
+/*chip*/["s2s","dx",550,796,"Site-to-Site\nVPN","S2S",{add:true}],
+/*chip*/["egress","egress",440,876,"Egress VPC","NAT",{add:true,w:114,sub:"NAT · Network Firewall"}],
+/*chip*/["ipam","ipam",550,876,"VPC IPAM","IPAM",{add:true}],
+/*chip*/["sh-ct","ctbase",720,486,"CT Baseline","CT",{}],
+/*chip*/["sh-tf","tfbase",830,486,"TF Baseline","TF",{}],
+/*chip*/["vcs","vcs",730,590,"VCS","Git",{w:100,sub:"app + manifest repos"}],
+/*chip*/["ecr","ecr",885,590,"ECR","ECR",{add:true,sub:"org-only pull"}],
+/*chip*/["ci","ci",0,0,"Shared CI","",{kind:"big",x:694,y:712,w:226,h:186,big:"CI",lines:["runner pods","build · test · scan · SBOM"]}],
+/*chip*/["pj-ct","ctbase",1045,486,"CT Baseline","CT",{}],
+/*chip*/["pj-tf","tfbase",1125,486,"TF Baseline","TF",{}],
+/*chip*/["devspace","devspace",0,0,"Development space","",{kind:"dev",x:1180,y:462,w:104,h:66,lines:["Development","space"],sub:"from Service Catalog"}],
+/*chip*/["commit","pathb",1040,580,"CodeCommit","CC",{w:66}],
+/*chip*/["pbuild","pathb",1108,580,"CodeBuild","CB",{w:66}],
+/*chip*/["deploy","pathb",1176,580,"CodeDeploy","CD",{w:66}],
+/*chip*/["ecs","pathb",1246,580,"ECS","ECS",{w:60,sub:"Fargate"}],
+/*chip*/["cd","cd",0,0,"CD on project EKS","",{kind:"big",x:1034,y:740,w:218,h:166,big:"CD",lines:["Argo CD pulls manifests","deploys to project workloads"]}]
+];
+// wires: id, path, flows, opts (dash, gov, hidden = drawn only while its flow plays, noarrow, n = badge, lx/ly, label)
+const WIRES=[
+/*wire*/["w1a","M1485 118 V148",[1],{n:1,lx:1500,ly:138,label:"push .tf"}],
+/*wire*/["w1b","M1400 178 H1297",[1],{n:1,lx:1342,ly:170,label:"trigger"}],
+/*wire*/["w2a","M1215 214 V244 H921 V139 H795",[2],{n:2,lx:1010,ly:247.5,label:""}],
+/*wire*/["l2a","",[2],{lx:873,ly:133,label:"create",anchor:"middle"}],
+/*wire*/["w2b","M800 182 H880 V262 H1080 V200",[2],{dash:true}],
+/*wire*/["l2b","",[2],{lx:838,ly:196,label:"created",anchor:"middle"}],
+/*wire*/["w2c","M512 350 V426 H1142 V438",[2,12],{gov:true}],
+/*wire*/["wsec","M312 350 V410 H197 V438",[12],{gov:true,n:12,lx:330,ly:372,label:"SCPs per OU"}],
+/*wire*/["winf","M412 350 V418 H802 V438",[12],{gov:true}],
+/*wire*/["winf2","M495 418 V438",[12],{gov:true}],
+/*wire*/["waft","M612 350 V400 H1000 V394",[12],{gov:true}],
+/*wire*/["w2d","M1050 394 V412 H1125 V484",[2],{hidden:true}],
+/*wire*/["w3a","M1295 236 C1345 236 1352 352 1398 352",[3],{dash:true,n:3,lx:1346,ly:262,label:"additional\ncustomizations"}],
+/*wire*/["w3b","M1400 372 C1350 372 1360 540 1313 540",[3],{n:3,lx:1364,ly:470,label:"apply"}],
+/*wire*/["w3c","M512 692 H628 V968 H1142 V952",[3,6],{lx:660,ly:986,label:"TGW attachments · route tables: Shared / Prod / Non-Prod / Access"}],
+/*wire*/["w4","M1232 382 V460",[4],{n:4,lx:1242,ly:420,label:"launch"}],
+/*wire*/["w5a","M440 634 V678 H478",[5],{}],
+/*wire*/["w5b","M512 678 H634 V605 H713",[5],{n:5,lx:546,ly:670,label:"to VCS"}],
+/*wire*/["w5c","M418 752 V692 H478",[5],{}],
+/*wire*/["w6a","M730 658 V710",[6],{n:6,lx:742,ly:688,label:"push → build"}],
+/*wire*/["w6b","M890 710 V660",[6],{dash:true,lx:898,ly:690,label:"image"}],
+/*wire*/["w6c","M920 812 H1032",[6],{n:6,lx:934,ly:804}],
+/*wire*/["w7a","M1057 595 H1091",[7],{}],
+/*wire*/["w7b","M1125 595 H1159",[7],{}],
+/*wire*/["w7c","M1193 595 H1229",[7],{n:7,lx:1268,ly:568,label:""}],
+/*wire*/["n8","",[8],{n:8,lx:120,ly:652,label:"logs in from every account"}],
+/*wire*/["w8a","M777 370 V404 H281 V508",[8],{hidden:true}],
+/*wire*/["w8b","M1100 952 V1004 H52 V612 H281 V584",[8],{hidden:true}],
+/*wire*/["n9","",[9],{n:9,lx:160,ly:906,label:"findings in from\nevery account"}],
+/*wire*/["w9a","M1080 952 V1016 H140 V946",[9],{hidden:true}],
+/*wire*/["w9b","M334 900 H356 V1030 H1345 V629 H1398",[9],{hidden:true}],
+/*wire*/["w9c","M1485 388 V598",[9],{dash:true,n:9,lx:1495,ly:500,label:"policy results"}],
+/*wire*/["w9d","M1313 630 H1398",[9],{dash:true,n:9,lx:1322,ly:622,label:""}],
+/*wire*/["w10b","M1313 720 H1398",[10],{dash:true,n:10,lx:1322,ly:712,label:"cost"}],
+/*wire*/["w10a","M1313 810 H1398",[10],{dash:true,n:10,lx:1322,ly:802,label:"telemetry"}],
+/*wire*/["w11a","M449 107 H150 V178",[11],{gov:true,n:11,lx:300,ly:103}],
+/*wire*/["w11b","M150 264 V398 H982 V520 H988",[11],{hidden:true}],
+/*wire*/["w12a","M1142 438 V426 H512 V352",[12],{hidden:true}]
+];
+
+/* ---------- drawing ---------- */
+const ELS={}, PATHS={}, ROWS=[];
+el("rect",{x:6,y:6,width:1588,height:1048,rx:10,class:"frame"},L.ctr);
+el("text",{x:24,y:31,class:"ctitle","font-size":16,style:"fill:var(--accent)"},L.ctr,"TCSP");
+el("text",{x:72,y:31,class:"csub","font-size":11.5},L.ctr,"AWS multi-account platform · landing zone + internal developer platform");
+el("rect",{x:30,y:46,width:1300,height:1000,rx:8,class:"aws"},L.ctr);
+el("text",{x:42,y:64,class:"ctitle"},L.ctr,"AWS Cloud");
+el("text",{x:1400,y:58,class:"ctitle"},L.ctr,"Outside AWS");
+CONTAINERS.forEach(([x,y,w,h,t,cls,o])=>{o=o||{};el("rect",{x,y,width:w,height:h,rx:o.rx||8,class:cls},L.ctr);
+  if(t)el("text",{x:x+12,y:y+18,class:"ctitle"},L.ctr,t);if(o.sub)el("text",{x:x+12,y:y+32,class:"csub"},L.ctr,o.sub);});
+el("text",{x:807,y:922,class:"ctitle","text-anchor":"middle"},L.ctr,"Amazon EKS · shared CI cluster");
+// in-diagram legend (so exported images explain themselves)
+(function(){const g=el("g",{"aria-hidden":"true"},L.ctr);let y=876;el("text",{x:1400,y,class:"ctitle"},g,"Legend");
+  LAYERS.forEach(l=>{y+=19;el("rect",{x:1400,y:y-10,width:12,height:12,rx:3,style:`fill:var(--l-${LK[l]})`},g);el("text",{x:1420,y,class:"alab","font-size":11},g,l);});
+  y+=19;el("rect",{x:1400,y:y-10,width:12,height:12,rx:3,style:"fill:none;stroke:var(--add);stroke-dasharray:3 2"},g);el("text",{x:1420,y,class:"alab","font-size":11},g,"optional / recommended addition");
+  y+=19;const b=el("g",{class:"badge"},g);el("circle",{cx:1406,cy:y-4,r:7},b);el("text",{x:1406,y:y-0.5},b,"n");el("text",{x:1420,y,class:"alab","font-size":11},g,"service flow number");})();
+
+function bindChip(g,id,comp){
+  g.addEventListener("click",()=>showComponent(comp));
+  g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();showComponent(comp);}});
+  g.addEventListener("pointerenter",()=>showTip(g,comp));g.addEventListener("pointerleave",hideTip);
+  g.addEventListener("focus",()=>showTip(g,comp));g.addEventListener("blur",hideTip);
+}
+CHIPS.forEach(([id,comp,cx,top,label,abbr,o])=>{
+  const c=C[comp]; if(!c){console.error("TCSP: unknown component "+comp);return;}
+  const lay=LK[c.layer], kind=o.kind||"icon", name=label.replace("\n"," ");
+  const g=el("g",{class:"chip"+(kind==="acct"?" acct":" dimmable")+(o.add?" add":""),id:"chip-"+id,"data-c":comp,"data-layer":c.layer,tabindex:0,role:"button","aria-label":name+(name!==c.name?" ("+c.name+")":"")+". "+firstSentence(c.what)},L.chip);
+  if(kind==="icon"){
+    const lines=label.split("\n"),w=o.w||84,s=30,h=s+14+lines.length*12+(o.sub?11:0);
+    el("rect",{class:"hit",x:cx-w/2,y:top-4,width:w,height:h,rx:6},g);el("rect",{class:"halo",x:cx-w/2,y:top-4,width:w,height:h,rx:6},g);
+    el("rect",{x:cx-s/2,y:top,width:s,height:s,rx:6,style:`fill:var(--l-${lay})`},g);
+    el("text",{x:cx,y:top+s/2+3.5,class:"abbr"},g,abbr);
+    lines.forEach((t,i)=>el("text",{x:cx,y:top+s+13+i*12,class:"lbl"},g,t));
+    if(o.sub)el("text",{x:cx,y:top+s+13+lines.length*12-1,class:"sub"},g,o.sub);
+  }else if(kind==="ext"){
+    el("rect",{class:"hit",x:o.x-3,y:o.y-3,width:o.w+6,height:o.h+6,rx:9},g);el("rect",{class:"halo",x:o.x-3,y:o.y-3,width:o.w+6,height:o.h+6,rx:9},g);
+    el("rect",{class:"extbox",x:o.x,y:o.y,width:o.w,height:o.h,rx:8,style:`stroke:var(--l-${lay})`},g);
+    el("text",{x:o.x+o.w/2,y:o.y+(o.sub?o.h/2-2:o.h/2+4),class:"lbl","font-weight":600},g,label);
+    if(o.sub)el("text",{x:o.x+o.w/2,y:o.y+o.h/2+12,class:"sub"},g,o.sub);
+  }else if(kind==="big"){
+    el("rect",{class:"hit",x:o.x-4,y:o.y-4,width:o.w+8,height:o.h+8,rx:12},g);el("rect",{class:"halo",x:o.x-4,y:o.y-4,width:o.w+8,height:o.h+8,rx:12},g);
+    el("rect",{class:"ci",x:o.x,y:o.y,width:o.w,height:o.h,rx:10},g);
+    el("text",{x:o.x+o.w/2,y:o.y+o.h/2-6,class:"big"},g,o.big);
+    o.lines.forEach((t,i)=>el("text",{x:o.x+o.w/2,y:o.y+o.h/2+16+i*14,class:"sub","font-size":10.5},g,t));
+  }else if(kind==="dev"){
+    el("rect",{class:"hit",x:o.x-3,y:o.y-3,width:o.w+6,height:o.h+6,rx:9},g);el("rect",{class:"halo",x:o.x-3,y:o.y-3,width:o.w+6,height:o.h+6,rx:9},g);
+    el("rect",{class:"devspace",x:o.x,y:o.y,width:o.w,height:o.h,rx:8},g);
+    o.lines.forEach((t,i)=>el("text",{x:o.x+o.w/2,y:o.y+22+i*14,class:"lbl","font-weight":600},g,t));
+    el("text",{x:o.x+o.w/2,y:o.y+o.h-9,class:"sub"},g,o.sub);
+  }else if(kind==="acct"){
+    el("rect",{class:"outline",x:o.x,y:o.y,width:o.w,height:o.h,rx:8},g);
+    el("rect",{class:"hit",x:o.x+2,y:o.y+2,width:Math.min(o.w-4,230),height:36,rx:6},g);
+  }
+  ELS[id]=g; ROWS.push({id,comp}); bindChip(g,id,comp);
+});
+WIRES.forEach(([id,d,flows,o])=>{
+  const g=el("g",{class:"wire-g dimmable"+(o.hidden?" flowonly":""),id:"w-"+id,"aria-hidden":"true"},L.wire);
+  if(d){const p=el("path",{d,class:"wire"+(o.dash?" dash":"")+(o.gov?" gov":"")+(o.noarrow?" na":""),"marker-end":o.noarrow?null:"url(#arr)"},g);PATHS[id]=p;
+    if(!o.hidden)el("path",{d,class:"flowline"},g);}
+  let tx=o.lx;
+  if(o.n){const b=el("g",{class:"badge"},g);el("circle",{cx:o.lx,cy:o.ly-3.5,r:8},b);el("text",{x:o.lx,y:o.ly},b,String(o.n));tx=o.lx+12;}
+  if(o.label)o.label.split("\n").forEach((t,i)=>el("text",{x:tx,y:o.ly+i*12,class:"alab","text-anchor":o.n?"start":(o.anchor||"start")},g,t));
+  ELS[id]=g; ROWS.push({id,flows});
+});
+
+/* which elements each flow lights up */
+const LIT={};
+FLOWS.forEach(f=>{const s=new Set();
+  f.steps.forEach(st=>{const t=st.at||st.w;if(!ELS[t])console.error("TCSP: flow "+f.n+" refers to missing element "+t);s.add(t);});
+  f.also.forEach(a=>{if(!ELS[a])console.error("TCSP: flow "+f.n+" refers to missing element "+a);s.add(a);});
+  ROWS.forEach(r=>{if(r.flows&&r.flows.includes(f.n))s.add(r.id);if(r.comp&&C[r.comp].flows.includes(f.n))s.add(r.id);});
+  LIT[f.n]=s;});
+
+/* ---------- tooltip ---------- */
+function showTip(g,comp){const c=C[comp];if(!c)return;
+  tip.innerHTML="<b>"+esc(c.name)+"</b>"+esc(firstSentence(c.what));
+  const hit=g.querySelector(".hit")||g;const r=hit.getBoundingClientRect(),s=stage.getBoundingClientRect();
+  let left=r.left-s.left+r.width/2;left=Math.max(160,Math.min(s.width-160,left));
+  let top=r.top-s.top-8,below=false;if(r.top<90){top=r.bottom-s.top+8;below=true;}
+  tip.style.left=left+"px";tip.style.top=top+"px";tip.style.transform=below?"translate(-50%,0)":"translate(-50%,-100%)";tip.classList.add("show");}
+function hideTip(){tip.classList.remove("show");}
+
+/* ---------- hash ---------- */
+function setHash(h){try{history.replaceState(null,"",h?"#"+h:location.pathname+location.search);}catch(e){}}
+
+/* ---------- detail panel ---------- */
+const det=$("detail");
+function overview(){
+  det.innerHTML='<h2 id="detail-h">TCSP at a glance</h2><p class="hint">Hover a service for a one-line summary. Click it for the full detail, or pick a flow to play it.</p>'+
+  "<p>Eight account roles across four top-level OUs: management and AFT accounts at the top; Log Archive and Audit in the Security OU; Network and Shared in the Infra OU; one account per project and environment in the Project OU.</p>"+
+  "<p>Every account carries two baselines from birth: the CT Baseline from Control Tower and the TF Baseline from AFT global customizations. Teams get admin rights inside their own account, while SCPs on the OUs set the outer limits.</p>"+
+  "<p>Logs, findings, telemetry and cost data flow to central accounts and platforms from the first minute.</p>";
+  animatePanel();}
+function animatePanel(){det.classList.remove("enter");void det.offsetWidth;det.classList.add("enter");}
+function clearSel(){svg.querySelectorAll(".chip.sel").forEach(e=>e.classList.remove("sel"));}
+function showComponent(id,opts){opts=opts||{};const c=C[id];if(!c)return;
+  clearSel();svg.querySelectorAll('[data-c="'+id+'"]').forEach(e=>e.classList.add("sel"));
+  const lay=LK[c.layer];
+  det.innerHTML='<div class="d-head"><span class="sw" style="background:var(--l-'+lay+');width:14px;height:14px"></span><h2 id="detail-h">'+esc(c.name)+'</h2></div>'+
+   '<p class="meta"><span class="pill">'+esc(c.layer)+"</span>"+esc(c.account)+'</p><p class="meta">Owned by: '+esc(c.owner)+"</p>"+
+   "<h3>What it is</h3><p>"+esc(c.what)+"</p><h3>Why it exists</h3><p>"+esc(c.why)+"</p>"+
+   "<h3>Built to accommodate</h3><p>"+esc(c.accommodates)+"</p><h3>Guardrails that apply</h3><p>"+esc(c.guardrails)+"</p>"+
+   '<h3>Takes part in</h3><div class="fl">'+c.flows.map(n=>'<button type="button" data-flow="'+n+'"><span class="num">'+n+"</span>"+esc(FLOW[n].name)+"</button>").join("")+"</div>"+
+   '<p style="margin-top:12px"><a href="../docs/components/'+encodeURIComponent(c.file)+'.md">Read the full component doc</a></p>';
+  det.querySelectorAll("[data-flow]").forEach(b=>b.addEventListener("click",()=>startFlow(+b.dataset.flow)));
+  animatePanel();if(!opts.keepHash&&E.mode!=="tour")setHash("c-"+id);
+  if(opts.scroll){const g=svg.querySelector('[data-c="'+id+'"]');if(g&&g.scrollIntoView)g.scrollIntoView({block:"nearest",inline:"center",behavior:reduce.matches?"auto":"smooth"});}
+}
+
+/* ---------- flow list ---------- */
+const ol=$("flows");
+const GROUPS={1:"Build accounts",5:"Ship software",8:"Watch it",11:"Control access"};
+FLOWS.forEach(f=>{if(GROUPS[f.n]){const g=document.createElement("li");g.className="grp";g.textContent=GROUPS[f.n];g.setAttribute("aria-hidden","true");ol.appendChild(g);}
+  const li=document.createElement("li"),b=document.createElement("button");b.type="button";b.setAttribute("aria-pressed","false");b.dataset.n=f.n;
+  b.innerHTML='<span class="num">'+f.n+'</span><span><span class="ft">'+esc(f.name)+'</span><br><span class="fd">'+esc(f.short)+"</span></span>";
+  b.addEventListener("click",()=>{if(E.mode==="flow"&&curFlowN()===f.n)stopAll();else startFlow(f.n);});li.appendChild(b);ol.appendChild(li);});
+function markFlowButton(n){ol.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(+b.dataset.n===n)));}
+
+/* ---------- layer filters ---------- */
+const FSET=new Set(), fchips=$("fchips");
+LAYERS.forEach(l=>{const b=document.createElement("button");b.type="button";b.className="fchip";b.dataset.layer=l;b.setAttribute("aria-pressed","false");
+  b.innerHTML='<i class="sw" style="background:var(--l-'+LK[l]+')"></i>'+l;b.addEventListener("click",()=>toggleLayer(l));fchips.appendChild(b);});
+function applyFilter(){svg.classList.toggle("filtering",FSET.size>0);
+  svg.querySelectorAll(".chip").forEach(g=>g.classList.toggle("lay",FSET.has(g.dataset.layer)));
+  fchips.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(FSET.has(b.dataset.layer))));}
+function toggleLayer(l){if(E.mode)stopAll();if(FSET.has(l))FSET.delete(l);else FSET.add(l);applyFilter();}
+function clearFilter(){FSET.clear();applyFilter();}
+
+/* ---------- playback engine ---------- */
+const player=$("player"),plTitle=$("pl-title"),plStep=$("pl-step"),plDots=$("pl-dots"),playBtn=$("pl-play"),playIcon=$("pl-play-icon"),tourBtn=$("tour"),card=$("tourcard"),token=$("token");
+const E={mode:null,items:[],ii:0,si:0,phase:null,el:0,dur:0,len:0,playing:false,done:false,speed:1,last:0,raf:0};
+function curItem(){return E.items[E.ii];}
+function curFlowN(){const it=curItem();return it&&it.type==="flow"?it.n:null;}
+function setFocus(n){svg.classList.toggle("focus",n!=null);
+  for(const id in ELS){const g=ELS[id];g.classList.toggle("on",n!=null&&LIT[n].has(id));g.classList.remove("cur","done");}}
+function showToken(on){token.style.display=on?"":"none";}
+function placeToken(p){const path=PATHS[E.path];if(!path)return;const pt=path.getPointAtLength(Math.max(0,Math.min(1,p))*E.len);token.setAttribute("transform","translate("+pt.x.toFixed(1)+" "+pt.y.toFixed(1)+")");}
+function startFlow(n,autoplay){if(!FLOW[n])return;stopAll(true);E.mode="flow";E.items=[{type:"flow",n}];enterItem(0,0);setPlaying(autoplay!==false);setHash("flow-"+n);revealPlayer();}
+function startTour(){stopAll(true);E.mode="tour";E.items=[];
+  FLOWS.forEach(f=>{const cd=TOUR.find(t=>t.before===f.n);if(cd)E.items.push({type:"card",card:cd});E.items.push({type:"flow",n:f.n});});
+  tourBtn.setAttribute("aria-pressed","true");tourBtn.querySelector("span").textContent="Stop tour";
+  enterItem(0,0);setPlaying(true);revealPlayer();setHash("tour");}
+function revealPlayer(){player.hidden=false;const r=stage.getBoundingClientRect();if(r.top<-200||r.top>innerHeight*0.6)stage.scrollIntoView({block:"start",behavior:reduce.matches?"auto":"smooth"});}
+function enterItem(ii,si){E.ii=ii;const it=curItem();E.done=false;
+  if(it.type==="card"){setFocus(null);markFlowButton(null);FSET.clear();FSET.add(it.card.layer);applyFilter();showCard(it.card);
+    plTitle.innerHTML="Tour · "+esc(it.card.layer);plStep.textContent=it.card.text;plDots.innerHTML="";E.si=0;showToken(false);begin("card");}
+  else{hideCard();if(FSET.size){FSET.clear();applyFilter();}setFocus(it.n);markFlowButton(it.n);gotoStep(si===-1?FLOW[it.n].steps.length-1:si);}}
+function gotoStep(si){const n=curFlowN();const f=FLOW[n];E.si=si;
+  f.steps.forEach((st,i)=>{const g=ELS[st.at||st.w];if(!g)return;g.classList.toggle("cur",i===si);g.classList.toggle("done",i<si&&!!st.w);});
+  const st=f.steps[si];
+  plTitle.innerHTML='<span class="num">'+n+"</span>"+(E.mode==="tour"?"Tour · flow "+n+" of 12 · ":"Flow "+n+" · ")+esc(f.name);
+  plStep.innerHTML='<span class="of">Step '+(si+1)+" of "+f.steps.length+":</span> "+esc(st.text);
+  plDots.innerHTML=f.steps.map((_,i)=>'<i class="'+(i<si?"done":i===si?"cur":"")+'"></i>').join("");
+  if(st.w&&PATHS[st.w]){E.path=st.w;E.len=PATHS[st.w].getTotalLength();showToken(true);begin("move");}
+  else{showToken(false);begin("hold");}}
+function begin(p){E.phase=p;E.el=0;const rm=reduce.matches;
+  if(p==="move"){E.dur=rm?0:Math.max(900,E.len*3.2);placeToken(rm?1:0);}
+  else if(p==="hold"){const st=FLOW[curFlowN()].steps[E.si];E.dur=rm?3400:(st.w?1700:2400);if(st.w)placeToken(1);}
+  else if(p==="card"){E.dur=rm?4000:3400;}}
+function advance(){
+  if(E.phase==="move"){begin("hold");return;}
+  const it=curItem();
+  if(it.type==="flow"&&E.si<FLOW[it.n].steps.length-1){gotoStep(E.si+1);return;}
+  if(E.ii<E.items.length-1){enterItem(E.ii+1,0);return;}
+  finish();}
+function finish(){setPlaying(false);E.done=true;playBtn.setAttribute("aria-label","Replay");
+  if(E.mode==="tour"){plTitle.textContent="Tour complete";plStep.textContent="That was all twelve flows. Pick any flow to replay it, or click a service for detail.";}}
+function tick(ts){E.raf=requestAnimationFrame(tick);const dt=E.last?Math.min(ts-E.last,100):0;E.last=ts;
+  if(!E.playing||!E.mode)return;E.el+=dt*E.speed;
+  if(E.phase==="move")placeToken(E.dur?E.el/E.dur:1);
+  if(E.el>=E.dur)advance();}
+function setPlaying(on){E.playing=on;E.last=0;
+  playBtn.setAttribute("aria-label",on?"Pause":"Play");playIcon.setAttribute("d",on?"M4 3h3v10H4zM9 3h3v10H9z":"M4.5 2.5v11l9-5.5z");
+  if(on&&!E.raf)E.raf=requestAnimationFrame(tick);}
+function step(dir){if(!E.mode)return;setPlaying(false);E.done=false;const it=curItem();
+  if(it.type==="flow"){const max=FLOW[it.n].steps.length-1;
+    if(dir>0){if(E.si<max)gotoStep(E.si+1);else if(E.ii<E.items.length-1)enterItem(E.ii+1,0);}
+    else{if(E.si>0)gotoStep(E.si-1);else if(E.ii>0)enterItem(E.ii-1,-1);}}
+  else{if(dir>0)enterItem(E.ii+1,0);else if(E.ii>0)enterItem(E.ii-1,-1);}
+  if(E.phase==="move"){E.el=E.dur;placeToken(1);begin("hold");}}
+function stopAll(keepUi){setPlaying(false);if(E.raf){cancelAnimationFrame(E.raf);E.raf=0;}
+  const wasTour=E.mode==="tour";E.mode=null;E.items=[];setFocus(null);markFlowButton(null);showToken(false);hideCard();
+  if(wasTour||FSET.size){FSET.clear();applyFilter();}
+  tourBtn.setAttribute("aria-pressed","false");tourBtn.querySelector("span").textContent="Tour the platform";
+  if(!keepUi){player.hidden=true;setHash(null);}}
+function showCard(cd){card.innerHTML='<div class="k"><i class="sw" style="background:var(--l-'+LK[cd.layer]+')"></i>'+esc(cd.layer)+"</div>"+esc(cd.text);card.hidden=false;card.style.animation="none";void card.offsetWidth;card.style.animation="";}
+function hideCard(){card.hidden=true;}
+
+playBtn.addEventListener("click",()=>{if(!E.mode)return;if(E.done){replay();return;}setPlaying(!E.playing);});
+function replay(){if(!E.mode)return;enterItem(0,0);setPlaying(true);}
+$("pl-replay").addEventListener("click",replay);
+$("pl-prev").addEventListener("click",()=>step(-1));
+$("pl-next").addEventListener("click",()=>step(1));
+$("pl-close").addEventListener("click",()=>stopAll());
+player.querySelectorAll(".speed button").forEach(b=>b.addEventListener("click",()=>{E.speed=+b.dataset.s;player.querySelectorAll(".speed button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));}));
+tourBtn.addEventListener("click",()=>{if(E.mode==="tour")stopAll();else startTour();});
+$("reset").addEventListener("click",()=>{stopAll();clearFilter();clearSel();overview();setHash(null);});
+document.addEventListener("keydown",e=>{const t=e.target;if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"))return;
+  if(e.key==="Escape"){if(E.mode)stopAll();else if(FSET.size)clearFilter();}
+  else if(E.mode&&e.key==="ArrowRight"&&!e.altKey){step(1);}
+  else if(E.mode&&e.key==="ArrowLeft"&&!e.altKey){step(-1);}});
+
+/* ---------- deep links ---------- */
+function fromHash(){const h=(location.hash||"").slice(1);let m;
+  if((m=/^flow-(\d{1,2})$/.exec(h))&&FLOW[+m[1]])startFlow(+m[1]);
+  else if((m=/^c-([a-z0-9-]+)$/.exec(h))&&C[m[1]]){if(E.mode)stopAll(true),player.hidden=true;showComponent(m[1],{keepHash:true,scroll:true});}
+  else if(h==="tour")startTour();}
+window.addEventListener("hashchange",fromHash);
+
+overview();fromHash();
+window.TCSP={startFlow,startTour,stopAll,showComponent,state:E};
+})();
+</script>
+</body>
+</html>
