@@ -73,6 +73,14 @@ Teams that do not want Kubernetes use Path B (flow 7): CodeCommit, CodeBuild, Co
 
 A short, calm walkthrough of why the platform is needed and what it does: [`video/tcsp-explainer.mp4`](video/tcsp-explainer.mp4).
 
+## Benefits: who the platform is for
+
+1. **Organizations with many product teams on AWS.** Once 10 or more teams each need their own environments, per-team setup of accounts, networks and access stops scaling. TCSP turns every new account into the same reviewed Git change, so the hundredth account is as easy as the first.
+2. **Regulated teams that must prove control.** In finance, health, the public sector and other audited areas, every account needs tamper-proof logs, central findings and enforced policies. TCSP builds these in when the account is created, so audit evidence exists without per-team effort.
+3. **Teams that ship often and cannot wait on tickets.** Product and microservice teams that deploy daily need admin rights and a working pipeline on day one. Guardrails replace approval queues, and the golden paths (shared CI with CD on EKS, or CodePipeline to ECS) remove weeks of tooling setup.
+4. **Small platform or cloud teams serving a large engineering org.** A handful of platform engineers cannot hand-build environments for hundreds of developers. TCSP lets them own the shared parts as code and scale through self-service instead of headcount.
+5. **Companies consolidating sprawl or migrating existing accounts.** After acquisitions, shadow accounts or earlier landing zones, many organizations have inconsistent networks, duplicate CI and unknown spend. TCSP gives one org structure, one network hub and per-account cost, plus a tested path for moving existing production accounts in.
+
 ## Documentation map
 
 | Document | What it covers |

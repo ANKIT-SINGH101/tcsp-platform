@@ -10,10 +10,10 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f4f6f8; --surface:#ffffff; --ink:#17202a; --muted:#566372; --line:#8b97a5; --gov-line:#9aa5b2;
-  --accent:#0b5cad; --accent-soft:#e3eefa; --token:#e8890c; --token-soft:rgba(232,137,12,.22);
-  --ctr:#f8fafb; --ctr2:#eef1f4; --add:#0b8a7a; --dev:#fde8ee; --on-icon:#ffffff; --shadow:0 6px 24px rgba(16,24,40,.12);
-  --l-gov:#c0306b; --l-prov:#2f6bd6; --l-sec:#c8372d; --l-net:#6a3fcf; --l-del:#c8640a; --l-obs:#0e8a6a; --l-ppl:#4f5e6e;
+  --bg:#f1f4f7; --surface:#ffffff; --ink:#0b1219; --muted:#36424f; --line:#5f6c7a; --gov-line:#76828f;
+  --accent:#0a4f96; --accent-soft:#dde9f8; --token:#d97706; --token-soft:rgba(232,137,12,.22);
+  --ctr:#f7f9fb; --ctr2:#e7ecf1; --add:#08776a; --dev:#fde8ee; --on-icon:#ffffff; --shadow:0 6px 24px rgba(16,24,40,.12);
+  --l-gov:#b02a60; --l-prov:#2560c8; --l-sec:#b9302a; --l-net:#5f35c2; --l-del:#b35708; --l-obs:#0b7a5d; --l-ppl:#44515f;
   --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
   color-scheme:light;
 }
@@ -63,6 +63,9 @@ h1{font-weight:600;font-size:24px;margin:0;letter-spacing:.01em}
 .fchip:hover{border-color:var(--line)}
 .fchip[aria-pressed="true"]{border-color:var(--ink);background:var(--accent-soft);font-weight:500}
 .sw{width:12px;height:12px;border-radius:3px;display:inline-block;flex:none}
+.sep{width:1px;height:20px;background:var(--ctr2);margin:0 4px}
+.fchip.lines{padding:3px 11px}
+.fchip.lines svg{width:14px;height:14px}
 .legend{display:inline-flex;gap:14px;color:var(--muted);margin-left:auto;flex-wrap:wrap}
 .legend span{display:inline-flex;align-items:center;gap:6px}
 .sw.add{border:1.5px dashed var(--add);background:transparent}
@@ -78,15 +81,15 @@ svg#arch{display:block;width:100%;min-width:1100px;height:auto;font-family:var(-
 .ctr2{fill:var(--ctr2);stroke:var(--line);stroke-width:.9}
 .ctr.dash{fill:none;stroke-dasharray:5 4}
 .ctitle{font-size:12.5px;font-weight:600;fill:var(--ink)}
-.csub{font-size:10.5px;fill:var(--muted)}
-.lbl{font-size:11px;fill:var(--ink);text-anchor:middle}
-.sub{font-size:9.5px;fill:var(--muted);text-anchor:middle}
+.csub{font-size:10.5px;fill:var(--muted);font-weight:500}
+.lbl{font-size:11px;fill:var(--ink);text-anchor:middle;font-weight:500}
+.sub{font-size:9.8px;fill:var(--muted);text-anchor:middle;font-weight:500}
 .abbr{font-family:var(--f-mono);font-size:10px;font-weight:600;fill:var(--on-icon);text-anchor:middle;pointer-events:none}
 .big{font-size:24px;font-weight:600;fill:var(--ink);text-anchor:middle}
 .ci{fill:var(--surface);stroke:var(--ink);stroke-width:1.3}
 .extbox{fill:var(--surface);stroke-width:1.4}
 .devspace{fill:var(--dev);stroke:var(--l-prov);stroke-width:1.1}
-.alab{font-size:10px;fill:var(--muted)}
+.alab{font-size:10.2px;fill:var(--muted);font-weight:500}
 .badge circle{fill:var(--accent)}
 .badge text{font-family:var(--f-mono);font-size:9.5px;font-weight:600;fill:var(--surface);text-anchor:middle}
 
@@ -123,6 +126,9 @@ svg.focus .chip.acct.on .outline{stroke:var(--accent)}
 svg.focus .chip.acct.cur .outline{stroke:var(--token);stroke-width:3;animation:breathe 1.4s ease-in-out infinite}
 svg.focus .chip.cur .halo{opacity:1;stroke:var(--token);stroke-width:3;animation:pulse 1.3s ease-in-out infinite}
 svg.focus .chip.cur .hit{fill:var(--token-soft)}
+/* flow lines hidden: only a playing flow shows its own path */
+svg.nolines .wire-g:not(.on){opacity:0}
+svg.nolines .flowline{display:none}
 /* layer filter */
 svg.filtering .chip:not(.acct):not(.lay){opacity:.15}
 svg.filtering .wire-g{opacity:.18}
@@ -229,6 +235,8 @@ body.shot .flowline{display:none}
   <div class="filters" role="group" aria-label="Highlight a layer">
     <span class="lab">Highlight a layer:</span>
     <span id="fchips" style="display:contents"></span>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="fchip lines" id="lines" type="button" aria-pressed="false" title="Hide the arrows to see just the accounts and services. A playing flow still shows its own path."><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 8h10M8 4.5 11.5 8 8 11.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span>Hide flow lines</span></button>
     <span class="legend" aria-label="Legend">
       <span><i class="sw add"></i>optional / recommended addition</span>
       <span><i class="mini-badge">3</i>flow number</span>
@@ -277,7 +285,6 @@ body.shot .flowline{display:none}
     <h2 id="flows-h">Service flows</h2>
     <p class="hint">Pick a flow to play it step by step. Flows 1 to 4 build accounts, 5 to 7 ship software, 8 to 10 watch it, 11 and 12 control access.</p>
     <ol class="flows" id="flows"></ol>
-    <div class="row"><button class="btn" id="reset" type="button">Show everything</button></div>
   </section>
   <section class="panel" id="detail" aria-labelledby="detail-h"></section>
 </div>
@@ -639,7 +646,8 @@ $("pl-next").addEventListener("click",()=>step(1));
 $("pl-close").addEventListener("click",()=>stopAll());
 player.querySelectorAll(".speed button").forEach(b=>b.addEventListener("click",()=>{E.speed=+b.dataset.s;player.querySelectorAll(".speed button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));}));
 tourBtn.addEventListener("click",()=>{if(E.mode==="tour")stopAll();else startTour();});
-$("reset").addEventListener("click",()=>{stopAll();clearFilter();clearSel();overview();setHash(null);});
+const linesBtn=$("lines");
+linesBtn.addEventListener("click",()=>{const off=!svg.classList.contains("nolines");svg.classList.toggle("nolines",off);linesBtn.setAttribute("aria-pressed",String(off));linesBtn.querySelector("span").textContent=off?"Show flow lines":"Hide flow lines";});
 document.addEventListener("keydown",e=>{const t=e.target;if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"))return;
   if(e.key==="Escape"){if(E.mode)stopAll();else if(FSET.size)clearFilter();}
   else if(E.mode&&e.key==="ArrowRight"&&!e.altKey){step(1);}
